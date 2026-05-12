@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: Build ${{ matrix.os }}
@@ -32,7 +35,7 @@ jobs:
         run: npm run check
 
       - name: Build
-        run: npm run build
+        run: npm run build -- --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
