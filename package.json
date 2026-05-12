@@ -1,0 +1,57 @@
+{
+  "name": "qiongmei-pet",
+  "version": "0.1.0",
+  "description": "A tiny cross-platform desktop pet built with Electron.",
+  "author": "Qiongmei Pet Contributors",
+  "license": "MIT",
+  "main": "src/main.js",
+  "private": false,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node scripts/validate-assets.js",
+    "validate:assets": "node scripts/validate-assets.js",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "desktop-pet",
+    "electron",
+    "anime",
+    "pet",
+    "qiongmei"
+  ],
+  "devDependencies": {
+    "electron": "^42.0.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "app.qiongmei.pet",
+    "productName": "Qiongmei Pet",
+    "artifactName": "Qiongmei-Pet-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.entertainment"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "category": "Utility"
+    }
+  }
+}
