@@ -40,13 +40,6 @@ const affectionLabelEl = document.querySelector("#affection-label");
 const affectionCurrentEl = document.querySelector("#affection-current");
 const affectionHappyThresholdEl = document.querySelector("#affection-happy-threshold");
 const affectionCloseThresholdEl = document.querySelector("#affection-close-threshold");
-const affectionClickGainEl = document.querySelector("#affection-click-gain");
-const affectionChatGainEl = document.querySelector("#affection-chat-gain");
-const affectionDoubleClickGainEl = document.querySelector("#affection-double-click-gain");
-const affectionLongPressGainEl = document.querySelector("#affection-long-press-gain");
-const affectionGrowthCooldownEl = document.querySelector("#affection-growth-cooldown");
-const affectionDailyLimitEl = document.querySelector("#affection-daily-limit");
-const rapidClickEnergyCostEl = document.querySelector("#rapid-click-energy-cost");
 const affectionLowToneEl = document.querySelector("#affection-low-tone");
 const affectionMediumToneEl = document.querySelector("#affection-medium-tone");
 const affectionHighToneEl = document.querySelector("#affection-high-tone");
@@ -98,15 +91,8 @@ let config = {
     extraRules: "",
   },
   affection: {
-    enabled: true,
+    enabled: false,
     label: "好感",
-    clickGain: 1,
-    doubleClickGain: 3,
-    longPressGain: 2,
-    chatGain: 1,
-    growthCooldownSeconds: 30,
-    dailyGainLimit: 30,
-    rapidClickEnergyCost: 7,
     happyThreshold: 50,
     closeThreshold: 75,
     lowTone: "保持礼貌但有一点距离感，回复简洁，不要过分亲昵。",
@@ -117,8 +103,6 @@ let config = {
     affection: 10,
     energy: 80,
     mood: "calm",
-    affectionGainToday: 0,
-    affectionGainDate: "",
   },
 };
 let selectedVoiceName = "";
@@ -201,13 +185,6 @@ function renderConfig() {
   affectionCurrentEl.value = String(profile.affection ?? 10);
   affectionHappyThresholdEl.value = String(affection.happyThreshold || 50);
   affectionCloseThresholdEl.value = String(affection.closeThreshold || 75);
-  affectionClickGainEl.value = String(affection.clickGain ?? 1);
-  affectionChatGainEl.value = String(affection.chatGain ?? 1);
-  affectionDoubleClickGainEl.value = String(affection.doubleClickGain ?? 3);
-  affectionLongPressGainEl.value = String(affection.longPressGain ?? 2);
-  affectionGrowthCooldownEl.value = String(affection.growthCooldownSeconds ?? 30);
-  affectionDailyLimitEl.value = String(affection.dailyGainLimit ?? 30);
-  rapidClickEnergyCostEl.value = String(affection.rapidClickEnergyCost ?? 7);
   affectionLowToneEl.value = affection.lowTone || "";
   affectionMediumToneEl.value = affection.mediumTone || "";
   affectionHighToneEl.value = affection.highTone || "";
@@ -226,10 +203,10 @@ function renderConfig() {
   const llmReady = Boolean(assistant.baseUrl && assistant.model);
   llmStatusEl.textContent = llmReady ? "已配置" : "未配置";
   ttsStatusEl.textContent = tts.enabled ? "已开启" : "关闭";
-  affectionStatusEl.textContent = affection.enabled === false ? "关闭" : "开启";
+  affectionStatusEl.textContent = affection.enabled === false ? "建议关闭" : "测试中";
   affectionRuleStatusEl.textContent = affection.enabled === false
     ? "关闭后，大模型不会收到好感度阶段，也不会按好感度调整语气。"
-    : `今日已增长 ${profile.affectionGainToday || 0}，当前 ${affection.label || "好感"} ${profile.affection ?? 0}/100。`;
+    : `当前 ${affection.label || "好感"} ${profile.affection ?? 0}/100。阶段语气会写入 system prompt，但模型执行稳定性取决于具体 LLM。`;
   keyStatusEl.textContent = assistant.hasApiKey
     ? "已有 LLM API key。留空保存会保留原 key。"
     : "没有 LLM API key；本地模型服务一般可以留空。";
@@ -290,13 +267,6 @@ function readConfigForm(includeEmptyKey = false) {
     label: affectionLabelEl.value.trim() || "好感",
     happyThreshold: Number(affectionHappyThresholdEl.value || 50),
     closeThreshold: Number(affectionCloseThresholdEl.value || 75),
-    clickGain: Number(affectionClickGainEl.value || 0),
-    chatGain: Number(affectionChatGainEl.value || 0),
-    doubleClickGain: Number(affectionDoubleClickGainEl.value || 0),
-    longPressGain: Number(affectionLongPressGainEl.value || 0),
-    growthCooldownSeconds: Number(affectionGrowthCooldownEl.value || 0),
-    dailyGainLimit: Number(affectionDailyLimitEl.value || 0),
-    rapidClickEnergyCost: Number(rapidClickEnergyCostEl.value || 0),
     lowTone: affectionLowToneEl.value.trim(),
     mediumTone: affectionMediumToneEl.value.trim(),
     highTone: affectionHighToneEl.value.trim(),
@@ -396,7 +366,7 @@ rateEl.addEventListener("input", updateRangeLabels);
 pitchEl.addEventListener("input", updateRangeLabels);
 ttsProviderEl.addEventListener("change", updateProviderVisibility);
 affectionEnabledEl.addEventListener("change", () => {
-  affectionStatusEl.textContent = affectionEnabledEl.checked ? "开启" : "关闭";
+  affectionStatusEl.textContent = affectionEnabledEl.checked ? "测试中" : "建议关闭";
 });
 
 if ("speechSynthesis" in window) {

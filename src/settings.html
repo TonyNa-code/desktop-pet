@@ -61,6 +61,7 @@
           <input id="api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
         </label>
         <p id="key-status" class="hint"></p>
+        <p class="hint">本地部署模型和云端模型接口二选一即可。无论本地还是云端，都需要填写该接口支持的模型名；填错时可以直接点“测试 LLM”查看错误。</p>
         <div class="split-row">
           <label>
             <span>温度</span>
@@ -105,6 +106,7 @@
             <input id="tts-api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
           </label>
           <p id="tts-key-status" class="hint"></p>
+          <p class="hint">系统语音不需要模型地址。GPT-SoVITS 本地服务要先在本机启动推理服务，再填它的服务地址。自定义接口适合已经有网络 TTS 或自己封装服务的人。</p>
           <div class="split-row">
             <label>
               <span>请求格式</span>
@@ -147,10 +149,12 @@
               <span>切分方式</span>
               <input id="tts-text-split-method" type="text" placeholder="cut5" spellcheck="false" />
             </label>
+            <p class="hint">参考音频路径是 GPT-SoVITS 服务能访问到的音频路径。文本语言是要朗读内容的语言，参考文本语言是参考音频对应文字的语言，中文常用 zh。切分方式一般保持 cut5。</p>
           </div>
           <label id="custom-body-row">
             <span>自定义 JSON 模板</span>
             <textarea id="tts-custom-body" rows="4" spellcheck="false"></textarea>
+            <span class="hint">只在自定义接口时使用，{{text}} 会被替换为要朗读的文字。不知道接口需要什么字段时，先看该 TTS 服务文档。</span>
           </label>
         </div>
         <div class="split-row">
@@ -172,13 +176,14 @@
 
       <section class="panel">
         <div class="section-title">
-          <h2>互动数值</h2>
-          <span id="affection-status">开启</span>
+          <h2>关系语气（测试）</h2>
+          <span id="affection-status">建议关闭</span>
         </div>
         <label class="check-row">
           <input id="affection-enabled" type="checkbox" />
-          <span>启用好感度系统</span>
+          <span>启用关系语气测试</span>
         </label>
+        <p class="hint">这是实验功能。开启后只会把当前数值和阶段语气写进 LLM system prompt，不会通过点击、聊天或每日规则自动增长；如果模型不稳定，建议保持关闭。</p>
         <div class="split-row">
           <label>
             <span>数值名称</span>
@@ -199,40 +204,6 @@
             <input id="affection-close-threshold" type="number" min="1" max="100" step="1" />
           </label>
         </div>
-        <div class="split-row">
-          <label>
-            <span>点击增加</span>
-            <input id="affection-click-gain" type="number" min="0" max="10" step="1" />
-          </label>
-          <label>
-            <span>聊天增加</span>
-            <input id="affection-chat-gain" type="number" min="0" max="10" step="1" />
-          </label>
-        </div>
-        <div class="split-row">
-          <label>
-            <span>双击增加</span>
-            <input id="affection-double-click-gain" type="number" min="0" max="10" step="1" />
-          </label>
-          <label>
-            <span>长按增加</span>
-            <input id="affection-long-press-gain" type="number" min="0" max="10" step="1" />
-          </label>
-        </div>
-        <div class="split-row">
-          <label>
-            <span>增长冷却秒数</span>
-            <input id="affection-growth-cooldown" type="number" min="0" max="3600" step="1" />
-          </label>
-          <label>
-            <span>每日增长上限</span>
-            <input id="affection-daily-limit" type="number" min="0" max="100" step="1" />
-          </label>
-        </div>
-        <label>
-          <span>连续点击消耗活力</span>
-          <input id="rapid-click-energy-cost" type="number" min="0" max="20" step="1" />
-        </label>
         <label>
           <span>低阶段语气</span>
           <textarea id="affection-low-tone" rows="3" spellcheck="false"></textarea>

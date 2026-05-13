@@ -56,15 +56,8 @@ const DEFAULT_SETTINGS = {
     extraRules: "",
   },
   affection: {
-    enabled: true,
+    enabled: false,
     label: "好感",
-    clickGain: 1,
-    doubleClickGain: 3,
-    longPressGain: 2,
-    chatGain: 1,
-    growthCooldownSeconds: 30,
-    dailyGainLimit: 30,
-    rapidClickEnergyCost: 7,
     happyThreshold: 50,
     closeThreshold: 75,
     lowTone: "保持礼貌但有一点距离感，回复简洁，不要过分亲昵。",
@@ -78,9 +71,6 @@ const DEFAULT_PROFILE = {
   energy: 80,
   totalInteractions: 0,
   lastInteractionAt: 0,
-  lastAffectionGainAt: 0,
-  affectionGainDate: "",
-  affectionGainToday: 0,
   lastLaunchDate: "",
 };
 
@@ -376,28 +366,6 @@ function normalizeAffectionSettings(rawAffection = {}) {
   return {
     enabled: raw.enabled !== false,
     label: normalizeCompactText(raw.label, 24) || DEFAULT_SETTINGS.affection.label,
-    clickGain: Math.round(clampNumber(raw.clickGain, 0, 10, DEFAULT_SETTINGS.affection.clickGain)),
-    doubleClickGain: Math.round(clampNumber(
-      raw.doubleClickGain,
-      0,
-      10,
-      DEFAULT_SETTINGS.affection.doubleClickGain,
-    )),
-    longPressGain: Math.round(clampNumber(raw.longPressGain, 0, 10, DEFAULT_SETTINGS.affection.longPressGain)),
-    chatGain: Math.round(clampNumber(raw.chatGain, 0, 10, DEFAULT_SETTINGS.affection.chatGain)),
-    growthCooldownSeconds: Math.round(clampNumber(
-      raw.growthCooldownSeconds,
-      0,
-      3600,
-      DEFAULT_SETTINGS.affection.growthCooldownSeconds,
-    )),
-    dailyGainLimit: Math.round(clampNumber(raw.dailyGainLimit, 0, 100, DEFAULT_SETTINGS.affection.dailyGainLimit)),
-    rapidClickEnergyCost: Math.round(clampNumber(
-      raw.rapidClickEnergyCost,
-      0,
-      20,
-      DEFAULT_SETTINGS.affection.rapidClickEnergyCost,
-    )),
     happyThreshold: Math.round(clampNumber(raw.happyThreshold, 1, 100, DEFAULT_SETTINGS.affection.happyThreshold)),
     closeThreshold: Math.round(clampNumber(raw.closeThreshold, 1, 100, DEFAULT_SETTINGS.affection.closeThreshold)),
     lowTone: normalizeLongText(raw.lowTone, 800) || DEFAULT_SETTINGS.affection.lowTone,
@@ -456,9 +424,6 @@ function normalizeProfile(nextProfile) {
     energy: clamp(Number.isFinite(energy) ? energy : DEFAULT_PROFILE.energy, 0, 100),
     totalInteractions: Math.max(0, Number(nextProfile.totalInteractions) || 0),
     lastInteractionAt: Math.max(0, Number(nextProfile.lastInteractionAt) || 0),
-    lastAffectionGainAt: Math.max(0, Number(nextProfile.lastAffectionGainAt) || 0),
-    affectionGainDate: typeof nextProfile.affectionGainDate === "string" ? nextProfile.affectionGainDate : "",
-    affectionGainToday: Math.max(0, Number(nextProfile.affectionGainToday) || 0),
     lastLaunchDate: typeof nextProfile.lastLaunchDate === "string" ? nextProfile.lastLaunchDate : "",
   };
 }
@@ -697,35 +662,6 @@ function moodText() {
   return labels[profile.mood] || labels.calm;
 }
 
-function canGainAffection(now, amount) {
-  const affection = settings.affection || DEFAULT_SETTINGS.affection;
-  if (!affection.enabled || amount <= 0) return false;
-  const cooldownMs = affection.growthCooldownSeconds * 1000;
-  if (cooldownMs > 0 && now - profile.lastAffectionGainAt < cooldownMs) return false;
-
-  const today = todayKey();
-  if (profile.affectionGainDate !== today) {
-    profile.affectionGainDate = today;
-    profile.affectionGainToday = 0;
-  }
-  if (affection.dailyGainLimit > 0 && profile.affectionGainToday >= affection.dailyGainLimit) return false;
-  return true;
-}
-
-function addAffection(amount, now) {
-  const affection = settings.affection || DEFAULT_SETTINGS.affection;
-  if (!canGainAffection(now, amount)) return 0;
-  const dailyRoom = affection.dailyGainLimit > 0
-    ? Math.max(0, affection.dailyGainLimit - profile.affectionGainToday)
-    : amount;
-  const applied = Math.min(amount, dailyRoom, 100 - profile.affection);
-  if (applied <= 0) return 0;
-  profile.affection = clamp(profile.affection + applied, 0, 100);
-  profile.lastAffectionGainAt = now;
-  profile.affectionGainToday += applied;
-  return applied;
-}
-
 function updateMoodFromInteraction(kind) {
   const now = Date.now();
   const rapid = now - profile.lastInteractionAt < 700;
@@ -734,20 +670,16 @@ function updateMoodFromInteraction(kind) {
   profile.lastInteractionAt = now;
 
   if (kind === "doubleClick") {
-    addAffection(affection.doubleClickGain, now);
     profile.energy = clamp(profile.energy - 4, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "happy";
   } else if (kind === "chat") {
-    addAffection(affection.chatGain, now);
     profile.energy = clamp(profile.energy - 1, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "happy";
   } else if (kind === "longPress") {
-    addAffection(affection.longPressGain, now);
     profile.energy = clamp(profile.energy + 1, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "calm";
   } else {
-    addAffection(rapid ? 0 : affection.clickGain, now);
-    profile.energy = clamp(profile.energy - (rapid ? affection.rapidClickEnergyCost : 2), 0, 100);
+    profile.energy = clamp(profile.energy - (rapid ? 7 : 2), 0, 100);
     if (rapid) profile.mood = "annoyed";
     else if (profile.energy < 20) profile.mood = "tired";
     else if (affection.enabled && profile.affection >= affection.happyThreshold) profile.mood = "happy";
@@ -791,8 +723,6 @@ function publicChatConfig() {
       affection: profile.affection,
       energy: profile.energy,
       mood: profile.mood,
-      affectionGainToday: profile.affectionGainDate === todayKey() ? profile.affectionGainToday : 0,
-      affectionGainDate: profile.affectionGainDate,
     },
   };
 }
@@ -832,12 +762,6 @@ function applyProfileConfigPatch(patch = {}) {
   }
   if (patch.energy !== undefined) {
     profile.energy = clampNumber(patch.energy, 0, 100, profile.energy);
-    changed = true;
-  }
-  if (patch.resetDailyGain === true) {
-    profile.affectionGainDate = todayKey();
-    profile.affectionGainToday = 0;
-    profile.lastAffectionGainAt = 0;
     changed = true;
   }
   if (changed) writeProfile();
@@ -1361,18 +1285,7 @@ function showContextMenu() {
     checked: settings.restReminderMinutes === item.value,
     click: () => updateSettings({ restReminderMinutes: item.value }),
   }));
-  const affection = settings.affection || DEFAULT_SETTINGS.affection;
-  const statusItems = [
-    { label: `心情：${moodText()}`, enabled: false },
-    ...(affection.enabled ? [{ label: `${affection.label}：${profile.affection}`, enabled: false }] : []),
-    { label: `活力：${profile.energy}`, enabled: false },
-  ];
-
   const menu = Menu.buildFromTemplate([
-    {
-      label: "状态",
-      submenu: statusItems,
-    },
     {
       label: "角色",
       enabled: characterItems.length > 0,
