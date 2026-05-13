@@ -6,8 +6,8 @@
   "sprite": "sprite.png",
   "preview": "preview.png",
   "frame": {
-    "width": 192,
-    "height": 208
+    "width": 768,
+    "height": 832
   },
   "columns": 8,
   "states": {
