@@ -70,23 +70,42 @@
       "row": 9,
       "frames": 1,
       "interval": 520
+    },
+    "tsundereProud": {
+      "row": 10,
+      "frames": 1,
+      "interval": 560
+    },
+    "tsundereAnnoyed": {
+      "row": 11,
+      "frames": 1,
+      "interval": 560
+    },
+    "tsundereEmbarrassed": {
+      "row": 12,
+      "frames": 1,
+      "interval": 560
     }
   },
   "automaticActions": [
     "waiting",
-    "happy",
-    "shy",
+    "tsundereProud",
+    "tsundereAnnoyed",
+    "tsundereEmbarrassed",
     "review",
     "waving",
     "jumping"
   ],
   "clickActions": [
-    "waving",
-    "happy",
+    "tsundereProud",
+    "tsundereAnnoyed",
+    "tsundereEmbarrassed",
+    "failed",
+    "review",
     "shy",
     "surprised",
-    "review",
-    "failed",
+    "happy",
+    "waving",
     "jumping",
     "waiting"
   ],
@@ -96,7 +115,23 @@
       "frame": 0
     },
     {
-      "state": "happy",
+      "state": "tsundereProud",
+      "frame": 0
+    },
+    {
+      "state": "tsundereAnnoyed",
+      "frame": 0
+    },
+    {
+      "state": "tsundereEmbarrassed",
+      "frame": 0
+    },
+    {
+      "state": "failed",
+      "frame": 0
+    },
+    {
+      "state": "review",
       "frame": 0
     },
     {
@@ -108,16 +143,12 @@
       "frame": 0
     },
     {
+      "state": "happy",
+      "frame": 0
+    },
+    {
       "state": "waving",
       "frame": 1
-    },
-    {
-      "state": "review",
-      "frame": 0
-    },
-    {
-      "state": "failed",
-      "frame": 0
     },
     {
       "state": "jumping",
