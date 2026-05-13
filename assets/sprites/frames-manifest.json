@@ -38,18 +38,13 @@
       "frameCount": 8
     },
     {
-      "state": "waiting",
+      "state": "running",
       "row": 6,
       "frameCount": 6
     },
     {
-      "state": "running",
-      "row": 7,
-      "frameCount": 6
-    },
-    {
       "state": "review",
-      "row": 8,
+      "row": 7,
       "frameCount": 6
     }
   ]

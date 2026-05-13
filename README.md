@@ -1,6 +1,6 @@
 # Qiongmei Pet
 
-一个可以在 Windows / macOS / Linux 上运行的小桌宠项目。它使用 Electron 做透明置顶窗口，复用一张 8x9 的动画 spritesheet，因此不用安装复杂运行环境也能开发和打包。
+一个可以在 Windows / macOS / Linux 上运行的小桌宠项目。它使用 Electron 做透明置顶窗口，复用一张 8x8 的动画 spritesheet，因此不用安装复杂运行环境也能开发和打包。
 
 ![Qiongmei animation contact sheet](assets/preview/qiongmei-soft-contact.png)
 
@@ -50,9 +50,9 @@ assets/sprites/qiongmei-soft-4x.png
 规格：
 
 - 8 列
-- 9 行
+- 8 行
 - 单帧 768 x 832
-- 整张图 6144 x 7488
+- 整张图 6144 x 6656
 
 行顺序：
 
@@ -62,9 +62,8 @@ assets/sprites/qiongmei-soft-4x.png
 4. waving
 5. jumping
 6. failed
-7. waiting
-8. running
-9. review
+7. running
+8. review
 
 换角色时，只要保持同样的 atlas 规格，就可以直接替换 PNG。
 

@@ -10,9 +10,8 @@ const STATES = {
   waving: { row: 3, frames: 4, interval: 160 },
   jumping: { row: 4, frames: 5, interval: 140 },
   failed: { row: 5, frames: 8, interval: 220 },
-  waiting: { row: 6, frames: 6, interval: 500 },
-  running: { row: 7, frames: 6, interval: 100 },
-  review: { row: 8, frames: 6, interval: 500 },
+  running: { row: 6, frames: 6, interval: 100 },
+  review: { row: 7, frames: 6, interval: 500 },
 };
 
 let settings = { expressionMode: "automatic", scale: 1, alwaysOnTop: true };
@@ -68,7 +67,7 @@ function scheduleIdleBehavior() {
   const delay = 18000 + Math.random() * 14000;
   idleTimer = window.setTimeout(() => {
     if (state === "idle") {
-      const choices = ["waiting", "waiting", "review", "waving"];
+      const choices = ["review", "review", "waving", "jumping"];
       playTemporary(choices[Math.floor(Math.random() * choices.length)], 1200);
     }
     scheduleIdleBehavior();
@@ -78,7 +77,7 @@ function scheduleIdleBehavior() {
 function temporaryDuration(nextState) {
   if (nextState === "waving") return 1000;
   if (nextState === "failed") return 1700;
-  if (nextState === "waiting" || nextState === "review") return 1400;
+  if (nextState === "review") return 1400;
   return 1100;
 }
 
@@ -95,7 +94,7 @@ function playTemporary(nextState, duration = temporaryDuration(nextState)) {
 }
 
 function nextClickState() {
-  const states = ["waving", "review", "waiting", "failed"];
+  const states = ["waving", "review", "jumping", "failed"];
   const nextState = states[clickExpressionIndex % states.length];
   clickExpressionIndex += 1;
   return nextState;
@@ -109,7 +108,6 @@ function nextStaticExpression() {
     ["idle", 3],
     ["idle", 5],
     ["waving", 2],
-    ["waiting", 2],
     ["review", 1],
     ["review", 4],
     ["failed", 1],

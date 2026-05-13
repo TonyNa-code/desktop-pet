@@ -8,4 +8,4 @@ sure you have the right to publish the character artwork in your target context.
 
 The application source code is licensed under the MIT License. Artwork licensing
 can be replaced by swapping the spritesheet in `assets/sprites/qiongmei-soft-4x.png`
-and keeping the same 8-column by 9-row atlas layout.
+and keeping the same 8-column by 8-row atlas layout.

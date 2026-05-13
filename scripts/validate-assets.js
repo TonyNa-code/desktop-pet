@@ -3,7 +3,7 @@ const path = require("node:path");
 
 const expected = {
   width: 6144,
-  height: 7488,
+  height: 6656,
 };
 
 const file = path.join(__dirname, "..", "assets", "sprites", "qiongmei-soft-4x.png");
