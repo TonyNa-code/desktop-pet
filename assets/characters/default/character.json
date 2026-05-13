@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "id": "default",
+  "name": "Default Character",
+  "description": "Built-in sample character pack.",
+  "sprite": "sprite.png",
+  "preview": "preview.png",
+  "frame": {
+    "width": 768,
+    "height": 832
+  },
+  "columns": 8,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "interval": 900
+    },
+    "runningRight": {
+      "row": 1,
+      "frames": 8,
+      "interval": 100
+    },
+    "runningLeft": {
+      "row": 2,
+      "frames": 8,
+      "interval": 100
+    },
+    "waving": {
+      "row": 3,
+      "frames": 4,
+      "interval": 160
+    },
+    "jumping": {
+      "row": 4,
+      "frames": 5,
+      "interval": 140
+    },
+    "failed": {
+      "row": 5,
+      "frames": 8,
+      "interval": 220
+    },
+    "running": {
+      "row": 6,
+      "frames": 6,
+      "interval": 100
+    },
+    "review": {
+      "row": 7,
+      "frames": 6,
+      "interval": 500
+    }
+  },
+  "automaticActions": [
+    "review",
+    "review",
+    "waving",
+    "jumping"
+  ],
+  "clickActions": [
+    "waving",
+    "review",
+    "jumping",
+    "failed"
+  ],
+  "staticExpressions": [
+    {
+      "state": "idle",
+      "frame": 0
+    },
+    {
+      "state": "idle",
+      "frame": 1
+    },
+    {
+      "state": "idle",
+      "frame": 2
+    },
+    {
+      "state": "idle",
+      "frame": 3
+    },
+    {
+      "state": "idle",
+      "frame": 5
+    },
+    {
+      "state": "waving",
+      "frame": 2
+    },
+    {
+      "state": "review",
+      "frame": 1
+    },
+    {
+      "state": "review",
+      "frame": 4
+    },
+    {
+      "state": "failed",
+      "frame": 1
+    },
+    {
+      "state": "failed",
+      "frame": 4
+    }
+  ]
+}

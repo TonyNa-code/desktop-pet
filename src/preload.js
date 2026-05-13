@@ -1,12 +1,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopPet", {
-  getSettings: () => ipcRenderer.invoke("get-settings"),
+  getAppState: () => ipcRenderer.invoke("get-app-state"),
   setSettings: (patch) => ipcRenderer.send("set-settings", patch),
-  onSettingsUpdated: (callback) => {
-    const listener = (_event, settings) => callback(settings);
-    ipcRenderer.on("settings-updated", listener);
-    return () => ipcRenderer.off("settings-updated", listener);
+  onAppStateUpdated: (callback) => {
+    const listener = (_event, appState) => callback(appState);
+    ipcRenderer.on("app-state-updated", listener);
+    return () => ipcRenderer.off("app-state-updated", listener);
   },
   showContextMenu: () => ipcRenderer.send("show-context-menu"),
   dragStart: () => ipcRenderer.send("drag-start"),

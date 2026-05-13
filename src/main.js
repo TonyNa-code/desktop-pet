@@ -3,8 +3,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const BASE_SIZE = { width: 192, height: 208 };
+const DEFAULT_CHARACTER_ID = "default";
+const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 const DEFAULT_SETTINGS = {
+  characterId: DEFAULT_CHARACTER_ID,
   expressionMode: "automatic",
   scale: 1,
   alwaysOnTop: true,
@@ -13,6 +16,94 @@ const DEFAULT_SETTINGS = {
 let mainWindow;
 let settings = { ...DEFAULT_SETTINGS };
 let dragSnapshot = null;
+
+function isSafeAssetName(value) {
+  return (
+    typeof value === "string"
+    && value.length > 0
+    && !path.isAbsolute(value)
+    && !value.split(/[\\/]/).includes("..")
+  );
+}
+
+function publicAssetPath(...segments) {
+  return ["..", "assets", ...segments].map(encodeURIComponent).join("/");
+}
+
+function normalizeCharacterPack(rawPack, folderName) {
+  const id = typeof rawPack.id === "string" && rawPack.id.trim() ? rawPack.id.trim() : folderName;
+  const name = typeof rawPack.name === "string" && rawPack.name.trim() ? rawPack.name.trim() : id;
+  const description = typeof rawPack.description === "string" ? rawPack.description : "";
+  const sprite = isSafeAssetName(rawPack.sprite) ? rawPack.sprite : "sprite.png";
+  const preview = isSafeAssetName(rawPack.preview) ? rawPack.preview : "preview.png";
+  const frame = {
+    width: Number(rawPack.frame?.width) || 768,
+    height: Number(rawPack.frame?.height) || 832,
+  };
+  const columns = Number(rawPack.columns) || 8;
+  const states = rawPack.states && typeof rawPack.states === "object" ? rawPack.states : {};
+  const automaticActions = Array.isArray(rawPack.automaticActions) ? rawPack.automaticActions : [];
+  const clickActions = Array.isArray(rawPack.clickActions) ? rawPack.clickActions : [];
+  const staticExpressions = Array.isArray(rawPack.staticExpressions) ? rawPack.staticExpressions : [];
+
+  return {
+    id,
+    name,
+    description,
+    frame,
+    columns,
+    states,
+    automaticActions,
+    clickActions,
+    staticExpressions,
+    spritePath: publicAssetPath("characters", folderName, sprite),
+    previewPath: publicAssetPath("characters", folderName, preview),
+    absoluteSpritePath: path.join(CHARACTERS_DIR, folderName, sprite),
+  };
+}
+
+function readCharacterPack(folderName) {
+  if (!isSafeAssetName(folderName)) return null;
+  const manifestPath = path.join(CHARACTERS_DIR, folderName, "character.json");
+  try {
+    const rawPack = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const pack = normalizeCharacterPack(rawPack, folderName);
+    if (!pack.states.idle) return null;
+    return pack;
+  } catch {
+    return null;
+  }
+}
+
+function listCharacterPacks() {
+  try {
+    return fs.readdirSync(CHARACTERS_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => readCharacterPack(entry.name))
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
+  }
+}
+
+function getCharacterPack(characterId = settings.characterId) {
+  const packs = listCharacterPacks();
+  return packs.find((pack) => pack.id === characterId) || packs[0] || null;
+}
+
+function appState() {
+  return {
+    settings,
+    characters: listCharacterPacks().map(({ absoluteSpritePath, ...pack }) => pack),
+    activeCharacter: (() => {
+      const pack = getCharacterPack();
+      if (!pack) return null;
+      const { absoluteSpritePath, ...publicPack } = pack;
+      return publicPack;
+    })(),
+  };
+}
 
 function settingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
@@ -33,10 +124,16 @@ function writeSettings() {
 }
 
 function normalizeSettings(nextSettings) {
+  const requestedCharacterId = (
+    typeof nextSettings.characterId === "string" && nextSettings.characterId.trim()
+      ? nextSettings.characterId.trim()
+      : DEFAULT_CHARACTER_ID
+  );
+  const characterId = getCharacterPack(requestedCharacterId)?.id || DEFAULT_CHARACTER_ID;
   const expressionMode = nextSettings.expressionMode === "clickOnly" ? "clickOnly" : "automatic";
   const scale = nearestScale(Number(nextSettings.scale) || 1);
   const alwaysOnTop = nextSettings.alwaysOnTop !== false;
-  return { expressionMode, scale, alwaysOnTop };
+  return { characterId, expressionMode, scale, alwaysOnTop };
 }
 
 function nearestScale(scale) {
@@ -97,11 +194,18 @@ function updateSettings(patch) {
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
     applyWindowSize();
-    mainWindow.webContents.send("settings-updated", settings);
+    mainWindow.webContents.send("app-state-updated", appState());
   }
 }
 
 function showContextMenu() {
+  const characterItems = listCharacterPacks().map((character) => ({
+    label: character.name,
+    type: "radio",
+    checked: settings.characterId === character.id,
+    click: () => updateSettings({ characterId: character.id }),
+  }));
+
   const scaleItems = SIZE_PRESETS.map((scale) => ({
     label: `${Math.round(scale * 100)}%`,
     type: "radio",
@@ -110,6 +214,11 @@ function showContextMenu() {
   }));
 
   const menu = Menu.buildFromTemplate([
+    {
+      label: "角色",
+      enabled: characterItems.length > 0,
+      submenu: characterItems,
+    },
     {
       label: "表情模式",
       submenu: [
@@ -183,7 +292,7 @@ function endDrag() {
 }
 
 function iconImage() {
-  const sprite = path.join(__dirname, "..", "assets", "sprites", "default-character-sprite.png");
+  const sprite = getCharacterPack()?.absoluteSpritePath || "";
   return nativeImage.createFromPath(sprite).resize({ width: 32, height: 32 });
 }
 
@@ -191,7 +300,7 @@ app.whenReady().then(() => {
   app.setName("Desktop Pet");
   createWindow();
 
-  ipcMain.handle("get-settings", () => settings);
+  ipcMain.handle("get-app-state", () => appState());
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
   ipcMain.on("show-context-menu", showContextMenu);
   ipcMain.on("drag-start", beginDrag);

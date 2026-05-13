@@ -1,7 +1,7 @@
 {
   "name": "desktop-pet",
   "version": "0.1.0",
-  "description": "A tiny cross-platform desktop pet built with Electron.",
+  "description": "A cross-platform desktop pet template built with Electron.",
   "author": "Desktop Pet Contributors",
   "license": "MIT",
   "main": "src/main.js",
