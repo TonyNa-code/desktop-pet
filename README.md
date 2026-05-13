@@ -4,6 +4,10 @@
 
 ![Qiongmei animation contact sheet](assets/preview/qiongmei-soft-contact.png)
 
+## For Beginners
+
+如果只是想下载后直接运行，请看 [小白使用说明.md](小白使用说明.md)。
+
 ## Features
 
 - 透明、无边框、置顶小窗口
