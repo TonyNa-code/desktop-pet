@@ -39,7 +39,7 @@ let settings = {
   expressionMode: "automatic",
   scale: 1,
   alwaysOnTop: true,
-  tts: { enabled: false, voiceName: "", rate: 1, pitch: 1 },
+  tts: { enabled: false, provider: "none", voiceName: "", rate: 1, pitch: 1 },
 };
 let character = FALLBACK_CHARACTER;
 let spriteImage;
@@ -190,6 +190,9 @@ function applyAppState(nextAppState = {}) {
     alwaysOnTop: nextAppState.settings?.alwaysOnTop !== false,
     tts: {
       enabled: nextAppState.settings?.tts?.enabled === true,
+      provider: typeof nextAppState.settings?.tts?.provider === "string"
+        ? nextAppState.settings.tts.provider
+        : "none",
       voiceName: typeof nextAppState.settings?.tts?.voiceName === "string"
         ? nextAppState.settings.tts.voiceName
         : "",
@@ -348,8 +351,16 @@ function chooseTtsVoice() {
     || voices[0];
 }
 
-function speakText(text) {
-  if (!settings.tts?.enabled || !text || !("speechSynthesis" in window)) return;
+async function speakText(text) {
+  if (!settings.tts?.enabled || !text) return;
+  if (settings.tts.provider && !["none", "system"].includes(settings.tts.provider)) {
+    const result = await window.desktopPet.synthesizeSpeech(text);
+    if (!result?.ok || !result.audioDataUrl) return;
+    const audio = new Audio(result.audioDataUrl);
+    audio.play().catch(() => {});
+    return;
+  }
+  if (!("speechSynthesis" in window)) return;
   const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 500));
   const voice = chooseTtsVoice();
   if (voice) utterance.voice = voice;

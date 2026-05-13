@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/settings.js && node scripts/validate-assets.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && node scripts/validate-assets.js",
     "validate:assets": "node scripts/validate-assets.js",
     "build": "electron-builder"
   },

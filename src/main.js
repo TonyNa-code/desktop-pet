@@ -32,9 +32,19 @@ const DEFAULT_SETTINGS = {
   },
   tts: {
     enabled: false,
+    provider: "none",
     voiceName: "",
     rate: 1,
     pitch: 1,
+    endpoint: "",
+    apiKey: "",
+    requestMode: "json",
+    textLanguage: "zh",
+    promptLanguage: "zh",
+    promptText: "",
+    referenceAudioPath: "",
+    mediaType: "wav",
+    customBodyTemplate: "{\"text\":\"{{text}}\"}",
   },
 };
 const DEFAULT_PROFILE = {
@@ -48,6 +58,7 @@ const DEFAULT_PROFILE = {
 
 let mainWindow;
 let chatWindow;
+let quickChatWindow;
 let companionSettingsWindow;
 let settings = { ...DEFAULT_SETTINGS };
 let profile = { ...DEFAULT_PROFILE };
@@ -140,13 +151,17 @@ function getCharacterPack(characterId = settings.characterId) {
 
 function publicSettings() {
   const { apiKey, ...assistant } = settings.assistant || DEFAULT_SETTINGS.assistant;
+  const { apiKey: ttsApiKey, ...tts } = settings.tts || DEFAULT_SETTINGS.tts;
   return {
     ...settings,
     assistant: {
       ...assistant,
       hasApiKey: Boolean(apiKey),
     },
-    tts: { ...(settings.tts || DEFAULT_SETTINGS.tts) },
+    tts: {
+      ...tts,
+      hasApiKey: Boolean(ttsApiKey),
+    },
   };
 }
 
@@ -178,6 +193,10 @@ function readSettings() {
     parsed.assistant = {
       ...(parsed.assistant || {}),
       apiKey: readStoredApiKey(parsed.assistant || {}),
+    };
+    parsed.tts = {
+      ...(parsed.tts || {}),
+      apiKey: readStoredApiKey(parsed.tts || {}),
     };
     settings = normalizeSettings(parsed);
   } catch {
@@ -217,14 +236,19 @@ function readStoredApiKey(rawAssistant) {
 
 function settingsForStorage() {
   const stored = JSON.parse(JSON.stringify(settings));
-  const apiKey = stored.assistant?.apiKey;
-  if (!stored.assistant) return stored;
-  delete stored.assistant.apiKey;
-  delete stored.assistant.apiKeyEnc;
-  if (apiKey && safeStorage.isEncryptionAvailable()) {
-    stored.assistant.apiKeyEnc = safeStorage.encryptString(apiKey).toString("base64");
-  }
+  encryptStoredApiKey(stored.assistant);
+  encryptStoredApiKey(stored.tts);
   return stored;
+}
+
+function encryptStoredApiKey(section) {
+  if (!section) return;
+  const apiKey = section.apiKey;
+  delete section.apiKey;
+  delete section.apiKeyEnc;
+  if (apiKey && safeStorage.isEncryptionAvailable()) {
+    section.apiKeyEnc = safeStorage.encryptString(apiKey).toString("base64");
+  }
 }
 
 function normalizeSettings(nextSettings) {
@@ -258,11 +282,36 @@ function normalizeAssistantSettings(rawAssistant = {}) {
 
 function normalizeTtsSettings(rawTts = {}) {
   const raw = { ...DEFAULT_SETTINGS.tts, ...(rawTts || {}) };
+  const provider = ["none", "system", "gptsovits", "custom"].includes(raw.provider)
+    ? raw.provider
+    : (raw.enabled === true ? "system" : "none");
+  const endpoint = normalizeOptionalUrl(raw.endpoint);
+  const apiKey = typeof raw.apiKey === "string" ? raw.apiKey.trim() : "";
+  const requestMode = raw.requestMode === "query" ? "query" : "json";
+  const textLanguage = normalizeCompactText(raw.textLanguage, 16) || DEFAULT_SETTINGS.tts.textLanguage;
+  const promptLanguage = normalizeCompactText(raw.promptLanguage, 16) || DEFAULT_SETTINGS.tts.promptLanguage;
+  const promptText = normalizeLongText(raw.promptText, 1000);
+  const referenceAudioPath = normalizeLongText(raw.referenceAudioPath, 1000);
+  const mediaType = ["wav", "mp3", "ogg"].includes(raw.mediaType) ? raw.mediaType : DEFAULT_SETTINGS.tts.mediaType;
+  const customBodyTemplate = normalizeLongText(
+    raw.customBodyTemplate,
+    4000,
+  ) || DEFAULT_SETTINGS.tts.customBodyTemplate;
   return {
-    enabled: raw.enabled === true,
+    enabled: provider !== "none" && raw.enabled !== false,
+    provider,
     voiceName: normalizeCompactText(raw.voiceName, 160),
     rate: clampNumber(raw.rate, 0.5, 1.8, DEFAULT_SETTINGS.tts.rate),
     pitch: clampNumber(raw.pitch, 0.5, 1.8, DEFAULT_SETTINGS.tts.pitch),
+    endpoint,
+    apiKey,
+    requestMode,
+    textLanguage,
+    promptLanguage,
+    promptText,
+    referenceAudioPath,
+    mediaType,
+    customBodyTemplate,
   };
 }
 
@@ -277,9 +326,25 @@ function normalizeBaseUrl(value) {
   }
 }
 
+function normalizeOptionalUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value.trim());
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function normalizeCompactText(value, maxLength) {
   if (typeof value !== "string") return "";
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function normalizeLongText(value, maxLength) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, maxLength);
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -392,6 +457,43 @@ function createChatWindow() {
   });
 }
 
+function createQuickChatWindow() {
+  if (quickChatWindow && !quickChatWindow.isDestroyed()) {
+    quickChatWindow.show();
+    quickChatWindow.focus();
+    return;
+  }
+
+  const primary = screen.getPrimaryDisplay().workArea;
+  quickChatWindow = new BrowserWindow({
+    width: 380,
+    height: 86,
+    minWidth: 320,
+    minHeight: 76,
+    x: Math.round(primary.x + primary.width - 452),
+    y: Math.round(primary.y + primary.height - 186),
+    title: "Quick Companion Input",
+    frame: false,
+    resizable: false,
+    show: false,
+    backgroundColor: "#00000000",
+    transparent: true,
+    alwaysOnTop: settings.alwaysOnTop,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  quickChatWindow.loadFile(path.join(__dirname, "quick-chat.html"));
+  quickChatWindow.once("ready-to-show", () => quickChatWindow.show());
+  quickChatWindow.on("closed", () => {
+    quickChatWindow = null;
+  });
+}
+
 function createCompanionSettingsWindow() {
   if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
     companionSettingsWindow.show();
@@ -446,6 +548,10 @@ function updateSettings(patch) {
   if (chatWindow && !chatWindow.isDestroyed()) {
     chatWindow.setAlwaysOnTop(settings.alwaysOnTop);
     chatWindow.webContents.send("chat-state-updated", chatState());
+  }
+  if (quickChatWindow && !quickChatWindow.isDestroyed()) {
+    quickChatWindow.setAlwaysOnTop(settings.alwaysOnTop);
+    quickChatWindow.webContents.send("chat-state-updated", chatState());
   }
   if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
     companionSettingsWindow.webContents.send("chat-state-updated", chatState());
@@ -526,13 +632,18 @@ function notify(title, body, action) {
 
 function publicChatConfig() {
   const { apiKey, ...assistant } = settings.assistant || DEFAULT_SETTINGS.assistant;
+  const { apiKey: ttsApiKey, ...tts } = settings.tts || DEFAULT_SETTINGS.tts;
   return {
     assistant: {
       ...assistant,
       hasApiKey: Boolean(apiKey),
       canPersistApiKey: safeStorage.isEncryptionAvailable(),
     },
-    tts: { ...(settings.tts || DEFAULT_SETTINGS.tts) },
+    tts: {
+      ...tts,
+      hasApiKey: Boolean(ttsApiKey),
+      canPersistApiKey: safeStorage.isEncryptionAvailable(),
+    },
   };
 }
 
@@ -546,8 +657,11 @@ function applyChatConfigPatch(patch = {}) {
     delete assistantPatch.apiKey;
   }
   const ttsPatch = { ...(patch.tts || {}) };
-  if (ttsPatch.voiceName !== undefined && ttsPatch.enabled === undefined) {
-    ttsPatch.enabled = Boolean(ttsPatch.voiceName);
+  if (ttsPatch.apiKey === undefined) {
+    delete ttsPatch.apiKey;
+  }
+  if (ttsPatch.provider && ttsPatch.enabled === undefined) {
+    ttsPatch.enabled = ttsPatch.provider !== "none";
   }
   const settingsPatch = {
     assistant: assistantPatch,
@@ -750,6 +864,130 @@ function clearChatHistory() {
   return publicChatHistory();
 }
 
+function ttsEndpoint() {
+  const tts = settings.tts || DEFAULT_SETTINGS.tts;
+  if (tts.provider === "gptsovits") {
+    return tts.endpoint || "http://127.0.0.1:9880/tts";
+  }
+  return tts.endpoint;
+}
+
+function interpolateTemplate(template, text) {
+  const escapedText = text
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, "\\\"")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+  return template.replaceAll("{{text}}", escapedText);
+}
+
+function gptSovitsPayload(text) {
+  const tts = settings.tts || DEFAULT_SETTINGS.tts;
+  return {
+    text,
+    text_lang: tts.textLanguage || "zh",
+    ref_audio_path: tts.referenceAudioPath || "",
+    prompt_text: tts.promptText || "",
+    prompt_lang: tts.promptLanguage || "zh",
+    media_type: tts.mediaType || "wav",
+    speed_factor: tts.rate || 1,
+    streaming_mode: false,
+  };
+}
+
+function appendQuery(url, params) {
+  const nextUrl = new URL(url);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      nextUrl.searchParams.set(key, String(value));
+    }
+  }
+  return nextUrl.toString();
+}
+
+function audioContentType(response, provider) {
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("audio/")) return contentType.split(";")[0];
+  if (provider === "gptsovits") return `audio/${settings.tts.mediaType || "wav"}`;
+  return contentType || "audio/mpeg";
+}
+
+async function audioDataFromResponse(response, provider) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const data = await response.json();
+    const audioValue = data.audioDataUrl || data.audio_url || data.url || data.audio || data.audio_base64;
+    if (!audioValue) return null;
+    if (typeof audioValue === "string" && audioValue.startsWith("data:")) {
+      return audioValue;
+    }
+    if (typeof audioValue === "string" && /^https?:\/\//.test(audioValue)) {
+      const audioResponse = await fetch(audioValue);
+      if (!audioResponse.ok) return null;
+      const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+      return `data:${audioContentType(audioResponse, provider)};base64,${audioBuffer.toString("base64")}`;
+    }
+    if (typeof audioValue === "string") {
+      const mediaType = provider === "gptsovits" ? settings.tts.mediaType : "mpeg";
+      return `data:audio/${mediaType || "mpeg"};base64,${audioValue}`;
+    }
+    return null;
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) return null;
+  return `data:${audioContentType(response, provider)};base64,${buffer.toString("base64")}`;
+}
+
+async function synthesizeSpeech(_event, rawText) {
+  const text = compactAssistantReply(rawText).slice(0, 800);
+  const tts = settings.tts || DEFAULT_SETTINGS.tts;
+  if (!text || !tts.enabled || ["none", "system"].includes(tts.provider)) {
+    return { ok: false, skipped: true };
+  }
+
+  const endpoint = ttsEndpoint();
+  if (!endpoint) {
+    return { ok: false, error: "missing_tts_endpoint" };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    const headers = {};
+    if (tts.apiKey) headers.Authorization = `Bearer ${tts.apiKey}`;
+    let url = endpoint;
+    let requestOptions = {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+    };
+
+    if (tts.provider === "gptsovits") {
+      const payload = gptSovitsPayload(text);
+      if (tts.requestMode === "query") {
+        url = appendQuery(endpoint, payload);
+        requestOptions = { method: "GET", headers, signal: controller.signal };
+      } else {
+        requestOptions.headers = { ...headers, "Content-Type": "application/json" };
+        requestOptions.body = JSON.stringify(payload);
+      }
+    } else {
+      requestOptions.headers = { ...headers, "Content-Type": "application/json" };
+      requestOptions.body = interpolateTemplate(tts.customBodyTemplate, text);
+    }
+
+    const response = await fetch(url, requestOptions);
+    if (!response.ok) return { ok: false, error: `tts_status_${response.status}` };
+    const audioDataUrl = await audioDataFromResponse(response, tts.provider);
+    if (!audioDataUrl) return { ok: false, error: "empty_audio" };
+    return { ok: true, audioDataUrl };
+  } catch (error) {
+    return { ok: false, error: error?.name === "AbortError" ? "tts_timeout" : "tts_request_failed" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function showCurrentTime() {
   const time = new Intl.DateTimeFormat("zh-CN", {
     hour: "2-digit",
@@ -856,7 +1094,8 @@ function showContextMenu() {
     {
       label: "对话",
       submenu: [
-        { label: "打开聊天", click: createChatWindow },
+        { label: "快速输入", click: createQuickChatWindow },
+        { label: "完整聊天", click: createChatWindow },
         { label: "对话设置", click: createCompanionSettingsWindow },
       ],
     },
@@ -919,9 +1158,11 @@ app.whenReady().then(() => {
   ipcMain.handle("save-chat-config", (_event, patch) => applyChatConfigPatch(patch));
   ipcMain.handle("send-chat-message", sendChatMessage);
   ipcMain.handle("clear-chat-history", clearChatHistory);
+  ipcMain.handle("synthesize-speech", synthesizeSpeech);
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
   ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));
   ipcMain.on("open-chat-window", createChatWindow);
+  ipcMain.on("open-quick-chat-window", createQuickChatWindow);
   ipcMain.on("open-companion-settings", createCompanionSettingsWindow);
   ipcMain.on("show-context-menu", showContextMenu);
   ipcMain.on("drag-start", beginDrag);
@@ -936,7 +1177,8 @@ app.whenReady().then(() => {
     {
       label: "Desktop Pet",
       submenu: [
-        { label: "打开对话", accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
+        { label: "快速输入", accelerator: "CommandOrControl+Shift+Space", click: createQuickChatWindow },
+        { label: "完整聊天", accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
         { label: "对话设置", click: createCompanionSettingsWindow },
         { type: "separator" },
         { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },

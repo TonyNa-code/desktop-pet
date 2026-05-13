@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quick Companion Input</title>
+    <link rel="stylesheet" href="./quick-chat.css" />
+  </head>
+  <body>
+    <form id="quick-form" class="quick-shell">
+      <input id="quick-input" type="text" maxlength="1200" placeholder="和桌宠说一句..." autofocus />
+      <button id="send" type="submit">发送</button>
+      <button id="close" type="button" aria-label="关闭">×</button>
+      <span id="status">Enter 发送，Esc 关闭</span>
+    </form>
+    <script src="./quick-chat.js"></script>
+  </body>
+</html>

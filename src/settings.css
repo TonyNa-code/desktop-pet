@@ -14,7 +14,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -116,11 +117,10 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
-  min-height: 36px;
   box-sizing: border-box;
-  padding: 0 10px;
   border: 1px solid rgba(37, 40, 45, 0.15);
   border-radius: 8px;
   background: #ffffff;
@@ -128,8 +128,21 @@ select {
   outline: none;
 }
 
+input,
+select {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+textarea {
+  min-height: 92px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: rgba(49, 110, 116, 0.58);
   box-shadow: 0 0 0 3px rgba(49, 110, 116, 0.13);
 }
@@ -151,6 +164,20 @@ select:focus {
 .settings-footer div {
   display: flex;
   gap: 8px;
+}
+
+.sub-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(37, 40, 45, 0.1);
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.sub-grid {
+  display: grid;
+  gap: 12px;
 }
 
 #save-settings {
