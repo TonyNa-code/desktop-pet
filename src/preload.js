@@ -3,6 +3,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("desktopPet", {
   getAppState: () => ipcRenderer.invoke("get-app-state"),
   setSettings: (patch) => ipcRenderer.send("set-settings", patch),
+  getChatState: () => ipcRenderer.invoke("get-chat-state"),
+  saveChatConfig: (patch) => ipcRenderer.invoke("save-chat-config", patch),
+  sendChatMessage: (text) => ipcRenderer.invoke("send-chat-message", text),
+  clearChatHistory: () => ipcRenderer.invoke("clear-chat-history"),
+  openChatWindow: () => ipcRenderer.send("open-chat-window"),
   onAppStateUpdated: (callback) => {
     const listener = (_event, appState) => callback(appState);
     ipcRenderer.on("app-state-updated", listener);

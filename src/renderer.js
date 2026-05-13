@@ -35,7 +35,12 @@ const FALLBACK_CHARACTER = {
   ],
 };
 
-let settings = { expressionMode: "automatic", scale: 1, alwaysOnTop: true };
+let settings = {
+  expressionMode: "automatic",
+  scale: 1,
+  alwaysOnTop: true,
+  tts: { enabled: false, voiceName: "", rate: 1, pitch: 1 },
+};
 let character = FALLBACK_CHARACTER;
 let spriteImage;
 let state = "idle";
@@ -176,6 +181,14 @@ function applyAppState(nextAppState = {}) {
     expressionMode: nextAppState.settings?.expressionMode === "clickOnly" ? "clickOnly" : "automatic",
     scale: Number(nextAppState.settings?.scale) || 1,
     alwaysOnTop: nextAppState.settings?.alwaysOnTop !== false,
+    tts: {
+      enabled: nextAppState.settings?.tts?.enabled === true,
+      voiceName: typeof nextAppState.settings?.tts?.voiceName === "string"
+        ? nextAppState.settings.tts.voiceName
+        : "",
+      rate: Number(nextAppState.settings?.tts?.rate) || 1,
+      pitch: Number(nextAppState.settings?.tts?.pitch) || 1,
+    },
   };
 
   if (characterChanged || !spriteImage) {
@@ -314,10 +327,38 @@ function showBubble(text, duration = 2600) {
   }, duration);
 }
 
+function chooseTtsVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  if (settings.tts.voiceName) {
+    const exact = voices.find((voice) => voice.name === settings.tts.voiceName);
+    if (exact) return exact;
+  }
+  return voices.find((voice) => /^zh/i.test(voice.lang))
+    || voices.find((voice) => /^ja|^en/i.test(voice.lang))
+    || voices[0];
+}
+
+function speakText(text) {
+  if (!settings.tts?.enabled || !text || !("speechSynthesis" in window)) return;
+  const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 500));
+  const voice = chooseTtsVoice();
+  if (voice) utterance.voice = voice;
+  utterance.rate = Math.min(Math.max(Number(settings.tts.rate) || 1, 0.5), 1.8);
+  utterance.pitch = Math.min(Math.max(Number(settings.tts.pitch) || 1, 0.5), 1.8);
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
 function handlePetMessage(message = {}) {
   const text = typeof message === "string" ? message : message.text;
+  const bubbleText = typeof message === "object" && message.bubbleText ? message.bubbleText : text;
   const action = typeof message === "object" ? message.action : "";
-  showBubble(text);
+  showBubble(bubbleText);
+  if (typeof message !== "object" || message.speak !== false) {
+    speakText(text);
+  }
   if (!dragStart && action && character.states[action]) {
     playTemporary(action, Math.max(temporaryDuration(action), 1200));
   }

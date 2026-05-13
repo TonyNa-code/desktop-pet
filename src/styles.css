@@ -18,7 +18,7 @@ body {
   left: 0;
   bottom: 0;
   width: 100vw;
-  height: calc(100vh - 68px);
+  height: calc(100vh - 92px);
   display: block;
   image-rendering: auto;
   cursor: grab;
@@ -34,7 +34,7 @@ body {
   top: 6px;
   left: 50%;
   max-width: calc(100vw - 20px);
-  max-height: 48px;
+  max-height: 72px;
   min-height: 24px;
   padding: 7px 10px;
   border: 1px solid rgba(93, 86, 76, 0.18);

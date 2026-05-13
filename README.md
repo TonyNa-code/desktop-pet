@@ -25,6 +25,11 @@
   - 当前时间
   - 25 分钟专注提醒
   - 30 / 60 分钟休息提醒
+- 对话功能：
+  - 右键打开聊天窗口
+  - 连接 OpenAI-compatible LLM 接口
+  - 根据回复内容自动切换桌宠表情
+  - 使用系统语音朗读回复
 - 设置会自动保存到本机
 - GitHub Actions 可在 Windows / macOS / Linux 上构建安装包并更新 Release
 
@@ -52,6 +57,18 @@ npm run build
 ```
 
 本地构建只能稳定生成当前系统对应的平台包。GitHub Actions 会分别在 Windows、macOS 和 Linux runner 上构建三端产物。
+
+## Chat, LLM, And TTS
+
+右键桌宠，选择 `对话 > 打开聊天`。聊天窗口里点 `设置`，填写：
+
+- `Base URL`：OpenAI-compatible 接口地址，例如 `http://localhost:11434/v1`
+- `模型名`：接口支持的模型名
+- `API key`：需要鉴权的接口才填写，本地模型通常可以留空
+
+API key 只保存在本机。应用会优先用系统安全存储加密；如果当前系统不支持安全持久化，key 只在本次运行中保留。聊天记录只保留在本次运行中，不会写入仓库。
+
+TTS 使用系统自带语音。在聊天设置里打开 `朗读回复` 后，桌宠收到回复时会同步朗读，并根据回复内容切换到适合的表情或动作。
 
 ## Character Packs
 

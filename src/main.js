@@ -1,9 +1,18 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, nativeImage, Notification } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  ipcMain,
+  screen,
+  nativeImage,
+  Notification,
+  safeStorage,
+} = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const BASE_SIZE = { width: 192, height: 208 };
-const BUBBLE_HEIGHT = 68;
+const BUBBLE_HEIGHT = 92;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -13,6 +22,19 @@ const DEFAULT_SETTINGS = {
   scale: 1,
   alwaysOnTop: true,
   restReminderMinutes: 0,
+  assistant: {
+    baseUrl: "",
+    model: "",
+    apiKey: "",
+    temperature: 0.7,
+    maxHistory: 12,
+  },
+  tts: {
+    enabled: false,
+    voiceName: "",
+    rate: 1,
+    pitch: 1,
+  },
 };
 const DEFAULT_PROFILE = {
   mood: "calm",
@@ -24,11 +46,13 @@ const DEFAULT_PROFILE = {
 };
 
 let mainWindow;
+let chatWindow;
 let settings = { ...DEFAULT_SETTINGS };
 let profile = { ...DEFAULT_PROFILE };
 let dragSnapshot = null;
 let restReminderTimer = null;
 let focusTimer = null;
+let chatHistory = [];
 
 function isSafeAssetName(value) {
   return (
@@ -112,9 +136,21 @@ function getCharacterPack(characterId = settings.characterId) {
   return packs.find((pack) => pack.id === characterId) || packs[0] || null;
 }
 
+function publicSettings() {
+  const { apiKey, ...assistant } = settings.assistant || DEFAULT_SETTINGS.assistant;
+  return {
+    ...settings,
+    assistant: {
+      ...assistant,
+      hasApiKey: Boolean(apiKey),
+    },
+    tts: { ...(settings.tts || DEFAULT_SETTINGS.tts) },
+  };
+}
+
 function appState() {
   return {
-    settings,
+    settings: publicSettings(),
     profile,
     characters: listCharacterPacks().map(({ absoluteSpritePath, ...pack }) => pack),
     activeCharacter: (() => {
@@ -137,9 +173,13 @@ function profilePath() {
 function readSettings() {
   try {
     const parsed = JSON.parse(fs.readFileSync(settingsPath(), "utf8"));
-    settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...parsed });
+    parsed.assistant = {
+      ...(parsed.assistant || {}),
+      apiKey: readStoredApiKey(parsed.assistant || {}),
+    };
+    settings = normalizeSettings(parsed);
   } catch {
-    settings = { ...DEFAULT_SETTINGS };
+    settings = normalizeSettings(DEFAULT_SETTINGS);
   }
 }
 
@@ -154,7 +194,7 @@ function readProfile() {
 
 function writeSettings() {
   fs.mkdirSync(app.getPath("userData"), { recursive: true });
-  fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
+  fs.writeFileSync(settingsPath(), JSON.stringify(settingsForStorage(), null, 2));
 }
 
 function writeProfile() {
@@ -162,7 +202,33 @@ function writeProfile() {
   fs.writeFileSync(profilePath(), JSON.stringify(profile, null, 2));
 }
 
+function readStoredApiKey(rawAssistant) {
+  if (typeof rawAssistant.apiKeyEnc === "string" && rawAssistant.apiKeyEnc) {
+    try {
+      return safeStorage.decryptString(Buffer.from(rawAssistant.apiKeyEnc, "base64")).trim();
+    } catch {
+      return "";
+    }
+  }
+  return typeof rawAssistant.apiKey === "string" ? rawAssistant.apiKey.trim() : "";
+}
+
+function settingsForStorage() {
+  const stored = JSON.parse(JSON.stringify(settings));
+  const apiKey = stored.assistant?.apiKey;
+  if (!stored.assistant) return stored;
+  delete stored.assistant.apiKey;
+  delete stored.assistant.apiKeyEnc;
+  if (apiKey && safeStorage.isEncryptionAvailable()) {
+    stored.assistant.apiKeyEnc = safeStorage.encryptString(apiKey).toString("base64");
+  }
+  return stored;
+}
+
 function normalizeSettings(nextSettings) {
+  nextSettings = nextSettings || {};
+  const assistant = normalizeAssistantSettings(nextSettings?.assistant);
+  const tts = normalizeTtsSettings(nextSettings?.tts);
   const requestedCharacterId = (
     typeof nextSettings.characterId === "string" && nextSettings.characterId.trim()
       ? nextSettings.characterId.trim()
@@ -175,7 +241,49 @@ function normalizeSettings(nextSettings) {
   const restReminderMinutes = [0, 30, 60].includes(Number(nextSettings.restReminderMinutes))
     ? Number(nextSettings.restReminderMinutes)
     : 0;
-  return { characterId, expressionMode, scale, alwaysOnTop, restReminderMinutes };
+  return { characterId, expressionMode, scale, alwaysOnTop, restReminderMinutes, assistant, tts };
+}
+
+function normalizeAssistantSettings(rawAssistant = {}) {
+  const raw = { ...DEFAULT_SETTINGS.assistant, ...(rawAssistant || {}) };
+  const baseUrl = normalizeBaseUrl(raw.baseUrl);
+  const model = normalizeCompactText(raw.model, 100);
+  const apiKey = typeof raw.apiKey === "string" ? raw.apiKey.trim() : "";
+  const temperature = clampNumber(raw.temperature, 0, 2, DEFAULT_SETTINGS.assistant.temperature);
+  const maxHistory = Math.round(clampNumber(raw.maxHistory, 2, 30, DEFAULT_SETTINGS.assistant.maxHistory));
+  return { baseUrl, model, apiKey, temperature, maxHistory };
+}
+
+function normalizeTtsSettings(rawTts = {}) {
+  const raw = { ...DEFAULT_SETTINGS.tts, ...(rawTts || {}) };
+  return {
+    enabled: raw.enabled === true,
+    voiceName: normalizeCompactText(raw.voiceName, 160),
+    rate: clampNumber(raw.rate, 0.5, 1.8, DEFAULT_SETTINGS.tts.rate),
+    pitch: clampNumber(raw.pitch, 0.5, 1.8, DEFAULT_SETTINGS.tts.pitch),
+  };
+}
+
+function normalizeBaseUrl(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const url = new URL(value.trim());
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function normalizeCompactText(value, maxLength) {
+  if (typeof value !== "string") return "";
+  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function clampNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric, min, max);
 }
 
 function normalizeProfile(nextProfile) {
@@ -248,8 +356,50 @@ function createWindow() {
   mainWindow.once("ready-to-show", () => mainWindow.showInactive());
 }
 
+function createChatWindow() {
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.show();
+    chatWindow.focus();
+    return;
+  }
+
+  chatWindow = new BrowserWindow({
+    width: 420,
+    height: 620,
+    minWidth: 360,
+    minHeight: 520,
+    title: "Desktop Pet Chat",
+    show: false,
+    backgroundColor: "#f7f3ee",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  chatWindow.loadFile(path.join(__dirname, "chat.html"));
+  chatWindow.once("ready-to-show", () => chatWindow.show());
+  chatWindow.on("closed", () => {
+    chatWindow = null;
+  });
+}
+
 function updateSettings(patch) {
-  settings = normalizeSettings({ ...settings, ...patch });
+  const nextSettings = {
+    ...settings,
+    ...(patch || {}),
+    assistant: {
+      ...(settings.assistant || DEFAULT_SETTINGS.assistant),
+      ...((patch && patch.assistant) || {}),
+    },
+    tts: {
+      ...(settings.tts || DEFAULT_SETTINGS.tts),
+      ...((patch && patch.tts) || {}),
+    },
+  };
+  settings = normalizeSettings(nextSettings);
   writeSettings();
   scheduleRestReminder();
   if (mainWindow) {
@@ -297,6 +447,10 @@ function updateMoodFromInteraction(kind) {
     profile.affection = clamp(profile.affection + 3, 0, 100);
     profile.energy = clamp(profile.energy - 4, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "happy";
+  } else if (kind === "chat") {
+    profile.affection = clamp(profile.affection + 1, 0, 100);
+    profile.energy = clamp(profile.energy - 1, 0, 100);
+    profile.mood = profile.energy < 20 ? "tired" : "happy";
   } else if (kind === "longPress") {
     profile.affection = clamp(profile.affection + 2, 0, 100);
     profile.energy = clamp(profile.energy + 1, 0, 100);
@@ -316,15 +470,237 @@ function updateMoodFromInteraction(kind) {
   }
 }
 
-function sendPetMessage(text, action = "waving") {
+function sendPetMessage(text, action = "waving", options = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("pet-message", { text, action });
+  mainWindow.webContents.send("pet-message", { text, action, ...options });
 }
 
 function notify(title, body, action) {
   sendPetMessage(body || title, action);
   if (!Notification.isSupported()) return;
   new Notification({ title, body, silent: true }).show();
+}
+
+function publicChatConfig() {
+  const { apiKey, ...assistant } = settings.assistant || DEFAULT_SETTINGS.assistant;
+  return {
+    assistant: {
+      ...assistant,
+      hasApiKey: Boolean(apiKey),
+      canPersistApiKey: safeStorage.isEncryptionAvailable(),
+    },
+    tts: { ...(settings.tts || DEFAULT_SETTINGS.tts) },
+  };
+}
+
+function publicChatHistory() {
+  return chatHistory.map((message) => ({ ...message }));
+}
+
+function applyChatConfigPatch(patch = {}) {
+  const assistantPatch = { ...(patch.assistant || {}) };
+  if (assistantPatch.apiKey === undefined) {
+    delete assistantPatch.apiKey;
+  }
+  const settingsPatch = {
+    assistant: assistantPatch,
+    tts: patch.tts || {},
+  };
+  updateSettings(settingsPatch);
+  return publicChatConfig();
+}
+
+function addChatMessage(role, content) {
+  const message = {
+    role,
+    content,
+    createdAt: Date.now(),
+  };
+  chatHistory.push(message);
+  if (chatHistory.length > 80) {
+    chatHistory = chatHistory.slice(-80);
+  }
+  return message;
+}
+
+function chatState() {
+  return {
+    config: publicChatConfig(),
+    history: publicChatHistory(),
+    character: (() => {
+      const pack = getCharacterPack();
+      return pack ? { id: pack.id, name: pack.name, description: pack.description } : null;
+    })(),
+  };
+}
+
+function cleanUserMessage(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+}
+
+function compactAssistantReply(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 1600);
+}
+
+function llmEndpoint(baseUrl) {
+  const cleanBaseUrl = baseUrl.replace(/\/+$/, "");
+  return cleanBaseUrl.endsWith("/chat/completions")
+    ? cleanBaseUrl
+    : `${cleanBaseUrl}/chat/completions`;
+}
+
+function activeCharacterStyle() {
+  const pack = getCharacterPack();
+  if (!pack) return "友好、简洁、适合陪伴工作的桌面伙伴。";
+  if (pack.id === "luna") {
+    return "礼貌、聪明、稍微傲娇，但不要刻薄；回复自然短句，适合桌宠陪伴。";
+  }
+  return "友好、轻松、简洁，像一个陪伴工作的桌面伙伴。";
+}
+
+function personaInstruction() {
+  const pack = getCharacterPack();
+  const characterName = pack?.name || "Desktop Pet";
+  return [
+    `你是 ${characterName}，一个会在桌面上陪人聊天的小角色。`,
+    `角色风格：${activeCharacterStyle()}`,
+    "默认用中文回答。回复要自然、简短、有陪伴感。",
+    "不要主动索要隐私信息。除非对方明确要求，不要输出长篇列表、表格或代码块。",
+  ].join("\n");
+}
+
+function llmMessagesFor(userText) {
+  const maxHistory = settings.assistant.maxHistory || DEFAULT_SETTINGS.assistant.maxHistory;
+  const history = chatHistory
+    .slice(-maxHistory)
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+  return [
+    { role: "system", content: personaInstruction() },
+    ...history,
+    { role: "user", content: userText },
+  ];
+}
+
+function pickAvailableAction(candidates, fallback = "waving") {
+  const states = getCharacterPack()?.states || {};
+  return candidates.find((stateName) => states[stateName]) || (states[fallback] ? fallback : "idle");
+}
+
+function inferPetAction(userText, replyText) {
+  const text = `${userText} ${replyText}`;
+  if (/谢谢|感谢|开心|哈哈|喜欢|太好|可爱|棒|好耶|nice/i.test(text)) {
+    return pickAvailableAction(["happy", "waving", "jumping"]);
+  }
+  if (/害羞|脸红|不好意思|嘴硬|傲娇|哼|才不是/i.test(text)) {
+    return pickAvailableAction(["tsundereEmbarrassed", "shy", "happy", "waving"]);
+  }
+  if (/生气|烦|不满|讨厌|笨|错了|失败|坏了|报错/i.test(text)) {
+    return pickAvailableAction(["tsundereAnnoyed", "failed", "review"]);
+  }
+  if (/想一想|为什么|怎么|如何|问题|代码|修|做|分析|解释|\?|\？/i.test(text)) {
+    return pickAvailableAction(["review", "tsundereProud", "waving"]);
+  }
+  return pickAvailableAction(["tsundereProud", "waving", "idle"]);
+}
+
+function bubblePreview(text) {
+  const cleanText = String(text || "").replace(/\s+/g, " ").trim();
+  return cleanText.length > 72 ? `${cleanText.slice(0, 70)}...` : cleanText;
+}
+
+async function requestAssistantReply(userText) {
+  const assistant = settings.assistant || DEFAULT_SETTINGS.assistant;
+  if (!assistant.baseUrl || !assistant.model) {
+    return {
+      reply: "还没有配置 LLM。打开聊天窗口里的设置，填入 Base URL 和模型名后就能聊天啦。",
+      action: "review",
+      ok: false,
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (assistant.apiKey) {
+      headers.Authorization = `Bearer ${assistant.apiKey}`;
+    }
+    const response = await fetch(llmEndpoint(assistant.baseUrl), {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: assistant.model,
+        messages: llmMessagesFor(userText),
+        temperature: assistant.temperature,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      return {
+        reply: `LLM 请求失败了，状态码 ${response.status}。检查一下 Base URL、模型名和 API key。`,
+        action: pickAvailableAction(["failed", "review"]),
+        ok: false,
+      };
+    }
+
+    const data = await response.json();
+    const reply = compactAssistantReply(data?.choices?.[0]?.message?.content);
+    if (!reply) {
+      return {
+        reply: "服务返回了空回复，换个模型或稍后再试一下。",
+        action: pickAvailableAction(["failed", "review"]),
+        ok: false,
+      };
+    }
+
+    return {
+      reply,
+      action: inferPetAction(userText, reply),
+      ok: true,
+    };
+  } catch (error) {
+    const timeoutMessage = error?.name === "AbortError" ? "LLM 请求超时了。" : "LLM 暂时连不上。";
+    return {
+      reply: `${timeoutMessage} 检查网络、Base URL 或本地模型服务是否启动。`,
+      action: pickAvailableAction(["failed", "review"]),
+      ok: false,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendChatMessage(_event, rawText) {
+  const text = cleanUserMessage(rawText);
+  if (!text) {
+    return { ok: false, error: "empty_message", history: publicChatHistory() };
+  }
+
+  sendPetMessage("我想一下。", pickAvailableAction(["review", "tsundereProud", "waving"]), { speak: false });
+  const result = await requestAssistantReply(text);
+  addChatMessage("user", text);
+  const assistantMessage = addChatMessage("assistant", result.reply);
+  sendPetMessage(result.reply, result.action, {
+    speak: true,
+    bubbleText: bubblePreview(result.reply),
+  });
+  updateMoodFromInteraction("chat");
+  return {
+    ok: result.ok,
+    action: result.action,
+    message: assistantMessage,
+    history: publicChatHistory(),
+  };
+}
+
+function clearChatHistory() {
+  chatHistory = [];
+  return publicChatHistory();
 }
 
 function showCurrentTime() {
@@ -430,6 +806,18 @@ function showContextMenu() {
         },
       ],
     },
+    {
+      label: "对话",
+      submenu: [
+        { label: "打开聊天", click: createChatWindow },
+        {
+          label: "朗读回复",
+          type: "checkbox",
+          checked: settings.tts.enabled,
+          click: (item) => updateSettings({ tts: { enabled: item.checked } }),
+        },
+      ],
+    },
     { type: "separator" },
     { label: "回到屏幕右下角", click: resetPosition },
     { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },
@@ -485,8 +873,13 @@ app.whenReady().then(() => {
   createWindow();
 
   ipcMain.handle("get-app-state", () => appState());
+  ipcMain.handle("get-chat-state", () => chatState());
+  ipcMain.handle("save-chat-config", (_event, patch) => applyChatConfigPatch(patch));
+  ipcMain.handle("send-chat-message", sendChatMessage);
+  ipcMain.handle("clear-chat-history", clearChatHistory);
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
   ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));
+  ipcMain.on("open-chat-window", createChatWindow);
   ipcMain.on("show-context-menu", showContextMenu);
   ipcMain.on("drag-start", beginDrag);
   ipcMain.handle("drag-move", moveDrag);
@@ -500,6 +893,8 @@ app.whenReady().then(() => {
     {
       label: "Desktop Pet",
       submenu: [
+        { label: "打开聊天", accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
+        { type: "separator" },
         { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },
       ],
     },
