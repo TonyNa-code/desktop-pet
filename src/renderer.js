@@ -45,6 +45,8 @@ let dragInterval;
 let dragStart = null;
 let didDrag = false;
 let lastClickAt = 0;
+let clickTimer;
+let hoverReadyAt = 0;
 
 function draw() {
   if (!spriteImage) return;
@@ -159,6 +161,7 @@ function normalizeCharacter(nextCharacter) {
 function applyAppState(nextAppState = {}) {
   const nextCharacter = normalizeCharacter(nextAppState.activeCharacter);
   const characterChanged = nextCharacter.id !== character.id;
+  const modeChanged = nextAppState.settings?.expressionMode !== settings.expressionMode;
   character = nextCharacter;
   settings = {
     characterId: nextAppState.settings?.characterId || character.id,
@@ -176,7 +179,7 @@ function applyAppState(nextAppState = {}) {
     return;
   }
 
-  resetAfterSettingsChange();
+  if (modeChanged) resetAfterSettingsChange();
 }
 
 function resetAfterSettingsChange() {
@@ -190,6 +193,7 @@ function resetAfterSettingsChange() {
 }
 
 function handleClick() {
+  window.desktopPet.recordInteraction("click");
   if (settings.expressionMode === "clickOnly") {
     const [nextState, nextFrame] = nextStaticExpression();
     setStaticExpression(nextState, nextFrame);
@@ -197,6 +201,30 @@ function handleClick() {
     const nextState = nextClickState();
     playTemporary(nextState);
   }
+}
+
+function handleDoubleClick() {
+  window.clearTimeout(clickTimer);
+  window.desktopPet.recordInteraction("doubleClick");
+  playTemporary("jumping", 1200);
+}
+
+function handleLongPress() {
+  window.clearTimeout(clickTimer);
+  window.desktopPet.recordInteraction("longPress");
+  if (settings.expressionMode === "clickOnly") {
+    setStaticExpression("review", 1);
+  } else {
+    playTemporary("review", 1400);
+  }
+}
+
+function scheduleSingleClick() {
+  window.clearTimeout(clickTimer);
+  clickTimer = window.setTimeout(() => {
+    lastClickAt = performance.now();
+    handleClick();
+  }, 180);
 }
 
 function beginDrag(event) {
@@ -245,9 +273,12 @@ function endDrag(event) {
     return;
   }
 
-  if (event.detail > 1 || heldDuration > 450 || clickedRecently) return;
-  lastClickAt = performance.now();
-  handleClick();
+  if (heldDuration > 450) {
+    handleLongPress();
+    return;
+  }
+  if (event.detail > 1 || clickedRecently) return;
+  scheduleSingleClick();
 }
 
 function loadSprite() {
@@ -263,6 +294,12 @@ function loadSprite() {
 }
 
 canvas.addEventListener("pointerdown", beginDrag);
+canvas.addEventListener("dblclick", handleDoubleClick);
+canvas.addEventListener("pointerenter", () => {
+  if (settings.expressionMode !== "automatic" || dragStart || performance.now() < hoverReadyAt) return;
+  hoverReadyAt = performance.now() + 10000;
+  if (state === "idle") playTemporary("waving", 900);
+});
 window.addEventListener("pointerup", endDrag);
 window.addEventListener("blur", () => {
   if (!dragStart) return;

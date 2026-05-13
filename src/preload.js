@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("desktopPet", {
     ipcRenderer.on("app-state-updated", listener);
     return () => ipcRenderer.off("app-state-updated", listener);
   },
+  recordInteraction: (kind) => ipcRenderer.send("record-interaction", kind),
   showContextMenu: () => ipcRenderer.send("show-context-menu"),
   dragStart: () => ipcRenderer.send("drag-start"),
   dragMove: () => ipcRenderer.invoke("drag-move"),

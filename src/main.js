@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, screen, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, screen, nativeImage, Notification } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -11,17 +11,30 @@ const DEFAULT_SETTINGS = {
   expressionMode: "automatic",
   scale: 1,
   alwaysOnTop: true,
+  restReminderMinutes: 0,
+};
+const DEFAULT_PROFILE = {
+  mood: "calm",
+  affection: 10,
+  energy: 80,
+  totalInteractions: 0,
+  lastInteractionAt: 0,
+  lastLaunchDate: "",
 };
 
 let mainWindow;
 let settings = { ...DEFAULT_SETTINGS };
+let profile = { ...DEFAULT_PROFILE };
 let dragSnapshot = null;
+let restReminderTimer = null;
+let focusTimer = null;
 
 function isSafeAssetName(value) {
   return (
     typeof value === "string"
     && value.length > 0
     && !path.isAbsolute(value)
+    && !/[\\/]/.test(value)
     && !value.split(/[\\/]/).includes("..")
   );
 }
@@ -42,9 +55,15 @@ function normalizeCharacterPack(rawPack, folderName) {
   };
   const columns = Number(rawPack.columns) || 8;
   const states = rawPack.states && typeof rawPack.states === "object" ? rawPack.states : {};
-  const automaticActions = Array.isArray(rawPack.automaticActions) ? rawPack.automaticActions : [];
-  const clickActions = Array.isArray(rawPack.clickActions) ? rawPack.clickActions : [];
-  const staticExpressions = Array.isArray(rawPack.staticExpressions) ? rawPack.staticExpressions : [];
+  const automaticActions = Array.isArray(rawPack.automaticActions)
+    ? rawPack.automaticActions.filter((stateName) => states[stateName])
+    : [];
+  const clickActions = Array.isArray(rawPack.clickActions)
+    ? rawPack.clickActions.filter((stateName) => states[stateName])
+    : [];
+  const staticExpressions = Array.isArray(rawPack.staticExpressions)
+    ? rawPack.staticExpressions.filter((expression) => expression && states[expression.state])
+    : [];
 
   return {
     id,
@@ -95,6 +114,7 @@ function getCharacterPack(characterId = settings.characterId) {
 function appState() {
   return {
     settings,
+    profile,
     characters: listCharacterPacks().map(({ absoluteSpritePath, ...pack }) => pack),
     activeCharacter: (() => {
       const pack = getCharacterPack();
@@ -109,6 +129,10 @@ function settingsPath() {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
+function profilePath() {
+  return path.join(app.getPath("userData"), "profile.json");
+}
+
 function readSettings() {
   try {
     const parsed = JSON.parse(fs.readFileSync(settingsPath(), "utf8"));
@@ -118,9 +142,23 @@ function readSettings() {
   }
 }
 
+function readProfile() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(profilePath(), "utf8"));
+    profile = normalizeProfile({ ...DEFAULT_PROFILE, ...parsed });
+  } catch {
+    profile = { ...DEFAULT_PROFILE };
+  }
+}
+
 function writeSettings() {
   fs.mkdirSync(app.getPath("userData"), { recursive: true });
   fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
+}
+
+function writeProfile() {
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
+  fs.writeFileSync(profilePath(), JSON.stringify(profile, null, 2));
 }
 
 function normalizeSettings(nextSettings) {
@@ -133,7 +171,26 @@ function normalizeSettings(nextSettings) {
   const expressionMode = nextSettings.expressionMode === "clickOnly" ? "clickOnly" : "automatic";
   const scale = nearestScale(Number(nextSettings.scale) || 1);
   const alwaysOnTop = nextSettings.alwaysOnTop !== false;
-  return { characterId, expressionMode, scale, alwaysOnTop };
+  const restReminderMinutes = [0, 30, 60].includes(Number(nextSettings.restReminderMinutes))
+    ? Number(nextSettings.restReminderMinutes)
+    : 0;
+  return { characterId, expressionMode, scale, alwaysOnTop, restReminderMinutes };
+}
+
+function normalizeProfile(nextProfile) {
+  const mood = ["calm", "happy", "tired", "annoyed"].includes(nextProfile.mood)
+    ? nextProfile.mood
+    : "calm";
+  const affection = Number(nextProfile.affection);
+  const energy = Number(nextProfile.energy);
+  return {
+    mood,
+    affection: clamp(Number.isFinite(affection) ? affection : DEFAULT_PROFILE.affection, 0, 100),
+    energy: clamp(Number.isFinite(energy) ? energy : DEFAULT_PROFILE.energy, 0, 100),
+    totalInteractions: Math.max(0, Number(nextProfile.totalInteractions) || 0),
+    lastInteractionAt: Math.max(0, Number(nextProfile.lastInteractionAt) || 0),
+    lastLaunchDate: typeof nextProfile.lastLaunchDate === "string" ? nextProfile.lastLaunchDate : "",
+  };
 }
 
 function nearestScale(scale) {
@@ -160,6 +217,8 @@ function applyWindowSize(keepCenter = true) {
 
 function createWindow() {
   readSettings();
+  readProfile();
+  recordLaunch();
   const size = displaySize();
   const primary = screen.getPrimaryDisplay().workArea;
   mainWindow = new BrowserWindow({
@@ -191,11 +250,99 @@ function createWindow() {
 function updateSettings(patch) {
   settings = normalizeSettings({ ...settings, ...patch });
   writeSettings();
+  scheduleRestReminder();
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
     applyWindowSize();
     mainWindow.webContents.send("app-state-updated", appState());
   }
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function recordLaunch() {
+  const today = todayKey();
+  if (profile.lastLaunchDate !== today) {
+    profile.energy = clamp(profile.energy + 15, 0, 100);
+    profile.mood = profile.affection >= 45 ? "happy" : "calm";
+    profile.lastLaunchDate = today;
+    writeProfile();
+  }
+}
+
+function moodText() {
+  const labels = {
+    calm: "平静",
+    happy: "开心",
+    tired: "累了",
+    annoyed: "有点烦",
+  };
+  return labels[profile.mood] || labels.calm;
+}
+
+function updateMoodFromInteraction(kind) {
+  const now = Date.now();
+  const rapid = now - profile.lastInteractionAt < 700;
+  profile.totalInteractions += 1;
+  profile.lastInteractionAt = now;
+
+  if (kind === "doubleClick") {
+    profile.affection = clamp(profile.affection + 3, 0, 100);
+    profile.energy = clamp(profile.energy - 4, 0, 100);
+    profile.mood = profile.energy < 20 ? "tired" : "happy";
+  } else if (kind === "longPress") {
+    profile.affection = clamp(profile.affection + 2, 0, 100);
+    profile.energy = clamp(profile.energy + 1, 0, 100);
+    profile.mood = profile.energy < 20 ? "tired" : "calm";
+  } else {
+    profile.affection = clamp(profile.affection + (rapid ? 0 : 1), 0, 100);
+    profile.energy = clamp(profile.energy - (rapid ? 7 : 2), 0, 100);
+    if (rapid) profile.mood = "annoyed";
+    else if (profile.energy < 20) profile.mood = "tired";
+    else if (profile.affection >= 50) profile.mood = "happy";
+    else profile.mood = "calm";
+  }
+
+  writeProfile();
+  if (mainWindow) {
+    mainWindow.webContents.send("app-state-updated", appState());
+  }
+}
+
+function notify(title, body) {
+  if (!Notification.isSupported()) return;
+  new Notification({ title, body, silent: false }).show();
+}
+
+function showCurrentTime() {
+  const time = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+  notify("Desktop Pet", `现在是 ${time}`);
+}
+
+function startFocusTimer() {
+  clearTimeout(focusTimer);
+  notify("专注开始", "25 分钟后会提醒休息。");
+  focusTimer = setTimeout(() => {
+    notify("专注结束", "可以休息一下了。");
+  }, 25 * 60 * 1000);
+}
+
+function scheduleRestReminder() {
+  clearInterval(restReminderTimer);
+  restReminderTimer = null;
+  if (!settings.restReminderMinutes) return;
+  restReminderTimer = setInterval(() => {
+    notify("休息提醒", "起来走动一下，放松眼睛。");
+  }, settings.restReminderMinutes * 60 * 1000);
 }
 
 function showContextMenu() {
@@ -213,7 +360,26 @@ function showContextMenu() {
     click: () => updateSettings({ scale }),
   }));
 
+  const restReminderItems = [
+    { label: "关闭", value: 0 },
+    { label: "每 30 分钟", value: 30 },
+    { label: "每 60 分钟", value: 60 },
+  ].map((item) => ({
+    label: item.label,
+    type: "radio",
+    checked: settings.restReminderMinutes === item.value,
+    click: () => updateSettings({ restReminderMinutes: item.value }),
+  }));
+
   const menu = Menu.buildFromTemplate([
+    {
+      label: "状态",
+      submenu: [
+        { label: `心情：${moodText()}`, enabled: false },
+        { label: `好感：${profile.affection}`, enabled: false },
+        { label: `活力：${profile.energy}`, enabled: false },
+      ],
+    },
     {
       label: "角色",
       enabled: characterItems.length > 0,
@@ -245,6 +411,17 @@ function showContextMenu() {
       type: "checkbox",
       checked: settings.alwaysOnTop,
       click: (item) => updateSettings({ alwaysOnTop: item.checked }),
+    },
+    {
+      label: "实用",
+      submenu: [
+        { label: "显示当前时间", click: showCurrentTime },
+        { label: "开始 25 分钟专注", click: startFocusTimer },
+        {
+          label: "休息提醒",
+          submenu: restReminderItems,
+        },
+      ],
     },
     { type: "separator" },
     { label: "回到屏幕右下角", click: resetPosition },
@@ -302,6 +479,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("get-app-state", () => appState());
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
+  ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));
   ipcMain.on("show-context-menu", showContextMenu);
   ipcMain.on("drag-start", beginDrag);
   ipcMain.handle("drag-move", moveDrag);
@@ -325,6 +503,8 @@ app.whenReady().then(() => {
   } catch {
     // Window icons are platform-dependent; failing to set one should not block the pet.
   }
+
+  scheduleRestReminder();
 });
 
 app.on("window-all-closed", () => app.quit());

@@ -48,6 +48,19 @@ function validateCharacter(folderName) {
     if (!Number.isFinite(Number(state.interval))) throw new Error(`${folderName}: ${stateName} interval is invalid`);
   }
 
+  for (const stateName of manifest.automaticActions || []) {
+    if (!manifest.states?.[stateName]) throw new Error(`${folderName}: automatic action ${stateName} is missing`);
+  }
+
+  for (const stateName of manifest.clickActions || []) {
+    if (!manifest.states?.[stateName]) throw new Error(`${folderName}: click action ${stateName} is missing`);
+  }
+
+  for (const expression of manifest.staticExpressions || []) {
+    if (!manifest.states?.[expression.state]) throw new Error(`${folderName}: static expression ${expression.state} is missing`);
+    if (!Number.isFinite(Number(expression.frame))) throw new Error(`${folderName}: static expression frame is invalid`);
+  }
+
   console.log(`Character OK: ${folderName} ${size.width}x${size.height}`);
 }
 
