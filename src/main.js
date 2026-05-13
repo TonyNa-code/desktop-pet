@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const BASE_SIZE = { width: 192, height: 208 };
-const BUBBLE_HEIGHT = 46;
+const BUBBLE_HEIGHT = 68;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];

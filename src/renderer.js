@@ -92,7 +92,7 @@ function scheduleIdleBehavior() {
   window.clearTimeout(idleTimer);
   if (settings.expressionMode !== "automatic") return;
 
-  const delay = 18000 + Math.random() * 14000;
+  const delay = 22000 + Math.random() * 15000;
   idleTimer = window.setTimeout(() => {
     if (state === "idle") {
       const choices = character.automaticActions.length > 0
@@ -323,11 +323,20 @@ function handlePetMessage(message = {}) {
   }
 }
 
+function startupGreetingText() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return "早上好呀";
+  if (hour >= 11 && hour < 14) return "中午好呀";
+  if (hour >= 14 && hour < 18) return "下午好呀";
+  if (hour >= 18 && hour < 23) return "晚上好呀";
+  return "夜深啦，早点休息。";
+}
+
 function scheduleStartupGreeting() {
   if (didShowStartupGreeting) return;
   didShowStartupGreeting = true;
   window.setTimeout(() => {
-    showBubble("早呀，今天也一起加油。", 3000);
+    showBubble(startupGreetingText(), 2800);
     if (!dragStart && character.states.waving) {
       playTemporary("waving", 1200);
     }
