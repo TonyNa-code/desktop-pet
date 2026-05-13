@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "id": "luna",
+  "name": "Luna",
+  "description": "A refined silver-haired young lady with elegant, slightly proud expressions.",
+  "sprite": "sprite.png",
+  "preview": "preview.png",
+  "frame": {
+    "width": 192,
+    "height": 208
+  },
+  "columns": 8,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 6,
+      "interval": 950
+    },
+    "runningRight": {
+      "row": 1,
+      "frames": 8,
+      "interval": 105
+    },
+    "runningLeft": {
+      "row": 2,
+      "frames": 8,
+      "interval": 105
+    },
+    "waving": {
+      "row": 3,
+      "frames": 4,
+      "interval": 190
+    },
+    "jumping": {
+      "row": 4,
+      "frames": 5,
+      "interval": 155
+    },
+    "failed": {
+      "row": 5,
+      "frames": 8,
+      "interval": 260
+    },
+    "waiting": {
+      "row": 6,
+      "frames": 6,
+      "interval": 620
+    },
+    "running": {
+      "row": 7,
+      "frames": 6,
+      "interval": 115
+    },
+    "review": {
+      "row": 8,
+      "frames": 6,
+      "interval": 540
+    }
+  },
+  "automaticActions": [
+    "waiting",
+    "review",
+    "waving",
+    "jumping"
+  ],
+  "clickActions": [
+    "waving",
+    "review",
+    "failed",
+    "jumping",
+    "waiting"
+  ],
+  "staticExpressions": [
+    {
+      "state": "idle",
+      "frame": 0
+    },
+    {
+      "state": "idle",
+      "frame": 1
+    },
+    {
+      "state": "idle",
+      "frame": 4
+    },
+    {
+      "state": "waving",
+      "frame": 2
+    },
+    {
+      "state": "failed",
+      "frame": 0
+    },
+    {
+      "state": "failed",
+      "frame": 3
+    },
+    {
+      "state": "waiting",
+      "frame": 1
+    },
+    {
+      "state": "waiting",
+      "frame": 4
+    },
+    {
+      "state": "review",
+      "frame": 2
+    },
+    {
+      "state": "review",
+      "frame": 4
+    }
+  ]
+}
