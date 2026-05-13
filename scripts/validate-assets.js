@@ -6,7 +6,7 @@ const expected = {
   height: 6656,
 };
 
-const file = path.join(__dirname, "..", "assets", "sprites", "qiongmei-soft-4x.png");
+const file = path.join(__dirname, "..", "assets", "sprites", "default-character-sprite.png");
 const buffer = fs.readFileSync(file);
 
 function readPngSize(png) {
@@ -25,4 +25,4 @@ if (size.width !== expected.width || size.height !== expected.height) {
   throw new Error(`Expected ${expected.width}x${expected.height}, got ${size.width}x${size.height}`);
 }
 
-console.log(`Asset OK: qiongmei-soft-4x.png ${size.width}x${size.height}`);
+console.log(`Asset OK: default-character-sprite.png ${size.width}x${size.height}`);

@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("qiongmei", {
+contextBridge.exposeInMainWorld("desktopPet", {
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setSettings: (patch) => ipcRenderer.send("set-settings", patch),
   onSettingsUpdated: (callback) => {

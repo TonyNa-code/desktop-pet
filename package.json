@@ -1,8 +1,8 @@
 {
-  "name": "qiongmei-pet",
+  "name": "desktop-pet",
   "version": "0.1.0",
   "description": "A tiny cross-platform desktop pet built with Electron.",
-  "author": "Qiongmei Pet Contributors",
+  "author": "Desktop Pet Contributors",
   "license": "MIT",
   "main": "src/main.js",
   "private": false,
@@ -18,16 +18,16 @@
     "electron",
     "anime",
     "pet",
-    "qiongmei"
+    "spritesheet"
   ],
   "devDependencies": {
     "electron": "^42.0.1",
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "app.qiongmei.pet",
-    "productName": "Qiongmei Pet",
-    "artifactName": "Qiongmei-Pet-${version}-${os}-${arch}.${ext}",
+    "appId": "app.desktop.pet",
+    "productName": "Desktop Pet",
+    "artifactName": "Desktop-Pet-${version}-${os}-${arch}.${ext}",
     "files": [
       "src/**/*",
       "assets/**/*",

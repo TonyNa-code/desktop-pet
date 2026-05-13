@@ -4,7 +4,7 @@
     768,
     832
   ],
-  "atlas": "assets/sprites/qiongmei-soft-4x.png",
+  "atlas": "assets/sprites/default-character-sprite.png",
   "columns": 8,
   "rows": [
     {

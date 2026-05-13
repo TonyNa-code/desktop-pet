@@ -1,8 +1,8 @@
-# Qiongmei Pet
+# Desktop Pet
 
-一个可以在 Windows / macOS / Linux 上运行的小桌宠项目。它使用 Electron 做透明置顶窗口，复用一张 8x8 的动画 spritesheet，因此不用安装复杂运行环境也能开发和打包。
+一个可以在 Windows / macOS / Linux 上运行的通用桌宠模板。它使用 Electron 做透明置顶窗口，复用一张 8x8 的动画 spritesheet；当前仓库内置一套默认角色素材，以后可以按同样规格替换成其他角色。
 
-![Qiongmei animation contact sheet](assets/preview/qiongmei-soft-contact.png)
+![Desktop pet animation contact sheet](assets/preview/default-character-contact.png)
 
 ## For Beginners
 
@@ -48,7 +48,7 @@ npm run build
 默认素材在：
 
 ```text
-assets/sprites/qiongmei-soft-4x.png
+assets/sprites/default-character-sprite.png
 ```
 
 规格：

@@ -183,12 +183,12 @@ function endDrag() {
 }
 
 function iconImage() {
-  const sprite = path.join(__dirname, "..", "assets", "sprites", "qiongmei-soft-4x.png");
+  const sprite = path.join(__dirname, "..", "assets", "sprites", "default-character-sprite.png");
   return nativeImage.createFromPath(sprite).resize({ width: 32, height: 32 });
 }
 
 app.whenReady().then(() => {
-  app.setName("Qiongmei Pet");
+  app.setName("Desktop Pet");
   createWindow();
 
   ipcMain.handle("get-settings", () => settings);
@@ -204,7 +204,7 @@ app.whenReady().then(() => {
 
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
-      label: "Qiongmei Pet",
+      label: "Desktop Pet",
       submenu: [
         { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },
       ],

@@ -1,7 +1,7 @@
 const canvas = document.querySelector("#pet");
 const ctx = canvas.getContext("2d", { alpha: true });
 
-const SPRITE = "../assets/sprites/qiongmei-soft-4x.png";
+const SPRITE = "../assets/sprites/default-character-sprite.png";
 const FRAME = { width: 768, height: 832 };
 const STATES = {
   idle: { row: 0, frames: 6, interval: 900 },
@@ -161,11 +161,11 @@ function beginDrag(event) {
   };
   didDrag = false;
   canvas.classList.add("dragging");
-  window.qiongmei.dragStart();
+  window.desktopPet.dragStart();
   window.clearInterval(dragInterval);
   dragInterval = window.setInterval(async () => {
     if (!dragStart) return;
-    const movement = await window.qiongmei.dragMove();
+    const movement = await window.desktopPet.dragMove();
     if (Math.abs(movement.dx) > 2 || Math.abs(movement.dy) > 2) {
       didDrag = true;
       if (Math.abs(movement.dx) > 4) {
@@ -180,7 +180,7 @@ function beginDrag(event) {
 function endDrag(event) {
   if (!dragStart) return;
   window.clearInterval(dragInterval);
-  window.qiongmei.dragEnd();
+  window.desktopPet.dragEnd();
   canvas.classList.remove("dragging");
 
   const heldDuration = performance.now() - dragStart.time;
@@ -218,23 +218,23 @@ window.addEventListener("blur", () => {
   if (!dragStart) return;
   dragStart = null;
   window.clearInterval(dragInterval);
-  window.qiongmei.dragEnd();
+  window.desktopPet.dragEnd();
   canvas.classList.remove("dragging");
   setState("idle");
 });
 
 window.addEventListener("contextmenu", (event) => {
   event.preventDefault();
-  window.qiongmei.showContextMenu();
+  window.desktopPet.showContextMenu();
 });
 
-window.qiongmei.onSettingsUpdated(applySettings);
+window.desktopPet.onSettingsUpdated(applySettings);
 
-Promise.all([loadSprite(), window.qiongmei.getSettings()])
+Promise.all([loadSprite(), window.desktopPet.getSettings()])
   .then(([, initialSettings]) => {
     applySettings(initialSettings);
     startAnimation();
   })
   .catch((error) => {
-    console.error("Unable to start Qiongmei Pet", error);
+    console.error("Unable to start Desktop Pet", error);
   });
