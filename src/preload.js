@@ -8,6 +8,12 @@ contextBridge.exposeInMainWorld("desktopPet", {
   sendChatMessage: (text) => ipcRenderer.invoke("send-chat-message", text),
   clearChatHistory: () => ipcRenderer.invoke("clear-chat-history"),
   openChatWindow: () => ipcRenderer.send("open-chat-window"),
+  openCompanionSettings: () => ipcRenderer.send("open-companion-settings"),
+  onChatStateUpdated: (callback) => {
+    const listener = (_event, chatState) => callback(chatState);
+    ipcRenderer.on("chat-state-updated", listener);
+    return () => ipcRenderer.off("chat-state-updated", listener);
+  },
   onAppStateUpdated: (callback) => {
     const listener = (_event, appState) => callback(appState);
     ipcRenderer.on("app-state-updated", listener);

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Companion Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main class="settings-shell">
+      <header class="settings-header">
+        <div>
+          <h1>对话设置</h1>
+          <p id="settings-subtitle">配置 LLM 和语音朗读</p>
+        </div>
+        <button id="back-to-chat" type="button">返回聊天</button>
+      </header>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>LLM</h2>
+          <span id="llm-status">未配置</span>
+        </div>
+        <label>
+          <span>Base URL</span>
+          <input id="base-url" type="url" placeholder="http://localhost:11434/v1" spellcheck="false" />
+        </label>
+        <label>
+          <span>模型名</span>
+          <input id="model" type="text" placeholder="例如 llama3.1、deepseek-chat、gpt-4.1-mini" spellcheck="false" />
+        </label>
+        <label>
+          <span>API key</span>
+          <input id="api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
+        </label>
+        <p id="key-status" class="hint"></p>
+        <div class="split-row">
+          <label>
+            <span>温度</span>
+            <input id="temperature" type="number" min="0" max="2" step="0.1" />
+          </label>
+          <label>
+            <span>记忆轮数</span>
+            <input id="max-history" type="number" min="2" max="30" step="1" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>TTS</h2>
+          <span id="tts-status">关闭</span>
+        </div>
+        <label>
+          <span>回复朗读</span>
+          <select id="tts-mode"></select>
+        </label>
+        <div class="split-row">
+          <label>
+            <span>语速 <b id="rate-value">1.0</b></span>
+            <input id="tts-rate" type="range" min="0.5" max="1.8" step="0.1" />
+          </label>
+          <label>
+            <span>音调 <b id="pitch-value">1.0</b></span>
+            <input id="tts-pitch" type="range" min="0.5" max="1.8" step="0.1" />
+          </label>
+        </div>
+        <p class="hint">默认关闭。选择“系统默认”或某个系统语音后，保存时会自动开启朗读。</p>
+      </section>
+
+      <footer class="settings-footer">
+        <span id="save-status">设置只保存在本机。</span>
+        <div>
+          <button id="clear-key" type="button">清除 key</button>
+          <button id="save-settings" type="button">保存设置</button>
+        </div>
+      </footer>
+    </main>
+    <script src="./settings.js"></script>
+  </body>
+</html>

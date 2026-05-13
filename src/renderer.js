@@ -71,6 +71,13 @@ function draw() {
   ctx.drawImage(spriteImage, sx, sy, frame.width, frame.height, 0, 0, canvas.width, canvas.height);
 }
 
+function applyPetLayout() {
+  const petWidth = Math.round(192 * settings.scale);
+  const petHeight = Math.round(208 * settings.scale);
+  document.documentElement.style.setProperty("--pet-width", `${petWidth}px`);
+  document.documentElement.style.setProperty("--pet-height", `${petHeight}px`);
+}
+
 function startAnimation() {
   window.clearInterval(animationTimer);
   const current = character.states[state] || character.states.idle;
@@ -190,6 +197,7 @@ function applyAppState(nextAppState = {}) {
       pitch: Number(nextAppState.settings?.tts?.pitch) || 1,
     },
   };
+  applyPetLayout();
 
   if (characterChanged || !spriteImage) {
     window.clearInterval(animationTimer);

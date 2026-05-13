@@ -12,7 +12,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const BASE_SIZE = { width: 192, height: 208 };
-const BUBBLE_HEIGHT = 92;
+const BUBBLE_HEIGHT = 132;
+const MIN_BUBBLE_WIDTH = 320;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -47,6 +48,7 @@ const DEFAULT_PROFILE = {
 
 let mainWindow;
 let chatWindow;
+let companionSettingsWindow;
 let settings = { ...DEFAULT_SETTINGS };
 let profile = { ...DEFAULT_PROFILE };
 let dragSnapshot = null;
@@ -310,7 +312,7 @@ function nearestScale(scale) {
 
 function displaySize(scale = settings.scale) {
   return {
-    width: Math.round(BASE_SIZE.width * scale),
+    width: Math.max(MIN_BUBBLE_WIDTH, Math.round(BASE_SIZE.width * scale)),
     height: Math.round(BASE_SIZE.height * scale) + BUBBLE_HEIGHT,
   };
 }
@@ -363,14 +365,18 @@ function createChatWindow() {
     return;
   }
 
+  const primary = screen.getPrimaryDisplay().workArea;
   chatWindow = new BrowserWindow({
-    width: 420,
-    height: 620,
-    minWidth: 360,
-    minHeight: 520,
-    title: "Desktop Pet Chat",
+    width: 360,
+    height: 460,
+    minWidth: 320,
+    minHeight: 360,
+    x: Math.round(primary.x + primary.width - 420),
+    y: Math.round(primary.y + primary.height - 560),
+    title: "Companion Chat",
     show: false,
-    backgroundColor: "#f7f3ee",
+    backgroundColor: "#f6f7f9",
+    alwaysOnTop: settings.alwaysOnTop,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -383,6 +389,36 @@ function createChatWindow() {
   chatWindow.once("ready-to-show", () => chatWindow.show());
   chatWindow.on("closed", () => {
     chatWindow = null;
+  });
+}
+
+function createCompanionSettingsWindow() {
+  if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
+    companionSettingsWindow.show();
+    companionSettingsWindow.focus();
+    return;
+  }
+
+  companionSettingsWindow = new BrowserWindow({
+    width: 620,
+    height: 720,
+    minWidth: 560,
+    minHeight: 620,
+    title: "Companion Settings",
+    show: false,
+    backgroundColor: "#f6f7f9",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  companionSettingsWindow.loadFile(path.join(__dirname, "settings.html"));
+  companionSettingsWindow.once("ready-to-show", () => companionSettingsWindow.show());
+  companionSettingsWindow.on("closed", () => {
+    companionSettingsWindow = null;
   });
 }
 
@@ -406,6 +442,13 @@ function updateSettings(patch) {
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
     applyWindowSize();
     mainWindow.webContents.send("app-state-updated", appState());
+  }
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    chatWindow.setAlwaysOnTop(settings.alwaysOnTop);
+    chatWindow.webContents.send("chat-state-updated", chatState());
+  }
+  if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
+    companionSettingsWindow.webContents.send("chat-state-updated", chatState());
   }
 }
 
@@ -502,9 +545,13 @@ function applyChatConfigPatch(patch = {}) {
   if (assistantPatch.apiKey === undefined) {
     delete assistantPatch.apiKey;
   }
+  const ttsPatch = { ...(patch.tts || {}) };
+  if (ttsPatch.voiceName !== undefined && ttsPatch.enabled === undefined) {
+    ttsPatch.enabled = Boolean(ttsPatch.voiceName);
+  }
   const settingsPatch = {
     assistant: assistantPatch,
-    tts: patch.tts || {},
+    tts: ttsPatch,
   };
   updateSettings(settingsPatch);
   return publicChatConfig();
@@ -608,7 +655,7 @@ function inferPetAction(userText, replyText) {
 
 function bubblePreview(text) {
   const cleanText = String(text || "").replace(/\s+/g, " ").trim();
-  return cleanText.length > 72 ? `${cleanText.slice(0, 70)}...` : cleanText;
+  return cleanText.length > 180 ? `${cleanText.slice(0, 178)}...` : cleanText;
 }
 
 async function requestAssistantReply(userText) {
@@ -810,12 +857,7 @@ function showContextMenu() {
       label: "对话",
       submenu: [
         { label: "打开聊天", click: createChatWindow },
-        {
-          label: "朗读回复",
-          type: "checkbox",
-          checked: settings.tts.enabled,
-          click: (item) => updateSettings({ tts: { enabled: item.checked } }),
-        },
+        { label: "对话设置", click: createCompanionSettingsWindow },
       ],
     },
     { type: "separator" },
@@ -880,6 +922,7 @@ app.whenReady().then(() => {
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
   ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));
   ipcMain.on("open-chat-window", createChatWindow);
+  ipcMain.on("open-companion-settings", createCompanionSettingsWindow);
   ipcMain.on("show-context-menu", showContextMenu);
   ipcMain.on("drag-start", beginDrag);
   ipcMain.handle("drag-move", moveDrag);
@@ -893,7 +936,8 @@ app.whenReady().then(() => {
     {
       label: "Desktop Pet",
       submenu: [
-        { label: "打开聊天", accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
+        { label: "打开对话", accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
+        { label: "对话设置", click: createCompanionSettingsWindow },
         { type: "separator" },
         { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },
       ],

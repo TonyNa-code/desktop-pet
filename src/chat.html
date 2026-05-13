@@ -3,69 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Desktop Pet Chat</title>
+    <title>Companion Chat</title>
     <link rel="stylesheet" href="./chat.css" />
   </head>
   <body>
     <main class="chat-shell">
       <header class="chat-header">
         <div>
-          <h1 id="chat-title">Desktop Pet Chat</h1>
-          <p id="chat-subtitle">和桌宠实时对话</p>
+          <h1 id="chat-title">伴侣对话</h1>
+          <p id="chat-subtitle">当前角色：桌宠</p>
         </div>
-        <button id="settings-toggle" type="button" aria-expanded="false">设置</button>
+        <button id="open-settings" type="button">设置</button>
       </header>
-
-      <section id="settings-panel" class="settings-panel" hidden>
-        <label>
-          <span>Base URL</span>
-          <input id="base-url" type="url" placeholder="https://example.com/v1" spellcheck="false" />
-        </label>
-        <label>
-          <span>模型名</span>
-          <input id="model" type="text" placeholder="服务商提供的 model 名称" spellcheck="false" />
-        </label>
-        <label>
-          <span>API key</span>
-          <input id="api-key" type="password" placeholder="留空表示不修改已保存的 key" spellcheck="false" />
-        </label>
-        <div id="key-status" class="hint"></div>
-
-        <div class="split-row">
-          <label>
-            <span>温度</span>
-            <input id="temperature" type="number" min="0" max="2" step="0.1" />
-          </label>
-          <label>
-            <span>记忆轮数</span>
-            <input id="max-history" type="number" min="2" max="30" step="1" />
-          </label>
-        </div>
-
-        <label class="check-row">
-          <input id="tts-enabled" type="checkbox" />
-          <span>朗读回复</span>
-        </label>
-        <label>
-          <span>系统语音</span>
-          <select id="voice-name"></select>
-        </label>
-        <div class="split-row">
-          <label>
-            <span>语速 <b id="rate-value">1.0</b></span>
-            <input id="tts-rate" type="range" min="0.5" max="1.8" step="0.1" />
-          </label>
-          <label>
-            <span>音调 <b id="pitch-value">1.0</b></span>
-            <input id="tts-pitch" type="range" min="0.5" max="1.8" step="0.1" />
-          </label>
-        </div>
-
-        <div class="settings-actions">
-          <button id="save-settings" type="button">保存设置</button>
-          <button id="clear-key" type="button">清除 key</button>
-        </div>
-      </section>
 
       <section id="messages" class="messages" aria-live="polite"></section>
 
@@ -75,7 +24,7 @@
       </form>
 
       <footer class="chat-footer">
-        <span id="status">聊天记录只保留在本次运行中。</span>
+        <span id="status">未配置时会提示打开设置。</span>
         <button id="clear-history" type="button">清空</button>
       </footer>
     </main>

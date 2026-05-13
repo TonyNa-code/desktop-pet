@@ -15,14 +15,15 @@ body {
 
 #pet {
   position: absolute;
-  left: 0;
+  left: 50%;
   bottom: 0;
-  width: 100vw;
-  height: calc(100vh - 92px);
+  width: var(--pet-width, 192px);
+  height: var(--pet-height, 208px);
   display: block;
   image-rendering: auto;
   cursor: grab;
   pointer-events: auto;
+  transform: translateX(-50%);
 }
 
 #pet.dragging {
@@ -31,25 +32,41 @@ body {
 
 #speech-bubble {
   position: absolute;
-  top: 6px;
+  top: 8px;
   left: 50%;
-  max-width: calc(100vw - 20px);
-  max-height: 72px;
-  min-height: 24px;
-  padding: 7px 10px;
-  border: 1px solid rgba(93, 86, 76, 0.18);
+  box-sizing: border-box;
+  width: min(296px, calc(100vw - 18px));
+  max-height: 108px;
+  min-height: 34px;
+  padding: 9px 12px;
+  border: 1px solid rgba(53, 48, 43, 0.14);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 8px 18px rgba(44, 39, 33, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(44, 39, 33, 0.16);
   color: #3d3730;
   font: 500 12.5px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   text-align: center;
   white-space: normal;
-  overflow: hidden;
+  overflow: auto;
   overflow-wrap: anywhere;
+  backdrop-filter: blur(8px);
   transform: translate(-50%, -8px) scale(0.98);
   opacity: 0;
   transition: opacity 160ms ease, transform 160ms ease;
+  pointer-events: auto;
+}
+
+#speech-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(53, 48, 43, 0.14);
+  border-bottom: 1px solid rgba(53, 48, 43, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  transform: translateX(-50%) rotate(45deg);
 }
 
 #speech-bubble.visible {
