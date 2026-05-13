@@ -60,18 +60,31 @@
       "row": 7,
       "frames": 1,
       "interval": 520
+    },
+    "shy": {
+      "row": 8,
+      "frames": 1,
+      "interval": 560
+    },
+    "surprised": {
+      "row": 9,
+      "frames": 1,
+      "interval": 520
     }
   },
   "automaticActions": [
     "waiting",
-    "review",
     "happy",
+    "shy",
+    "review",
     "waving",
     "jumping"
   ],
   "clickActions": [
     "waving",
     "happy",
+    "shy",
+    "surprised",
     "review",
     "failed",
     "jumping",
@@ -83,19 +96,23 @@
       "frame": 0
     },
     {
-      "state": "idle",
-      "frame": 1
+      "state": "happy",
+      "frame": 0
     },
     {
-      "state": "idle",
-      "frame": 4
+      "state": "shy",
+      "frame": 0
+    },
+    {
+      "state": "surprised",
+      "frame": 0
     },
     {
       "state": "waving",
       "frame": 1
     },
     {
-      "state": "happy",
+      "state": "review",
       "frame": 0
     },
     {
@@ -103,16 +120,8 @@
       "frame": 0
     },
     {
-      "state": "waiting",
+      "state": "jumping",
       "frame": 1
-    },
-    {
-      "state": "waiting",
-      "frame": 4
-    },
-    {
-      "state": "review",
-      "frame": 0
     }
   ]
 }
