@@ -38,21 +38,21 @@
     },
     "failed": {
       "row": 5,
-      "frames": 8,
+      "frames": 7,
       "interval": 260
     },
     "waiting": {
-      "row": 6,
+      "row": 0,
       "frames": 6,
       "interval": 620
     },
     "running": {
-      "row": 7,
-      "frames": 6,
+      "row": 6,
+      "frames": 5,
       "interval": 115
     },
     "review": {
-      "row": 8,
+      "row": 7,
       "frames": 6,
       "interval": 540
     }
