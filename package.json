@@ -28,6 +28,9 @@
     "appId": "app.desktop.pet",
     "productName": "Desktop Pet",
     "artifactName": "Desktop-Pet-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "buildResources": "build"
+    },
     "files": [
       "src/**/*",
       "assets/**/*",
@@ -38,19 +41,22 @@
         "dmg",
         "zip"
       ],
+      "icon": "build/icon.icns",
       "category": "public.app-category.entertainment"
     },
     "win": {
       "target": [
         "nsis",
         "portable"
-      ]
+      ],
+      "icon": "build/icon.ico"
     },
     "linux": {
       "target": [
         "AppImage",
         "tar.gz"
       ],
+      "icon": "build/icon.png",
       "category": "Utility"
     }
   }
