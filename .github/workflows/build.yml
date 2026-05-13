@@ -74,4 +74,4 @@ jobs:
             --repo "$REPOSITORY" \
             --target "$TARGET_SHA" \
             --title "Desktop Pet latest" \
-            --notes "Latest Desktop Pet build. Download the file for your operating system, then follow 小白使用说明.md."
+            --notes "Latest Desktop Pet build. Download the file for your operating system, then follow 快速上手指南.md."

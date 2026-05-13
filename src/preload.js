@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("desktopPet", {
   setSettings: (patch) => ipcRenderer.send("set-settings", patch),
   getChatState: () => ipcRenderer.invoke("get-chat-state"),
   saveChatConfig: (patch) => ipcRenderer.invoke("save-chat-config", patch),
+  testAssistantConnection: (patch) => ipcRenderer.invoke("test-assistant-connection", patch),
+  testTtsConnection: (patch) => ipcRenderer.invoke("test-tts-connection", patch),
   sendChatMessage: (text) => ipcRenderer.invoke("send-chat-message", text),
   clearChatHistory: () => ipcRenderer.invoke("clear-chat-history"),
   synthesizeSpeech: (text) => ipcRenderer.invoke("synthesize-speech", text),

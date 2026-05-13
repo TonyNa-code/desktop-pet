@@ -1,12 +1,21 @@
 const subtitleEl = document.querySelector("#settings-subtitle");
+const personaStatusEl = document.querySelector("#persona-status");
 const llmStatusEl = document.querySelector("#llm-status");
 const ttsStatusEl = document.querySelector("#tts-status");
+const affectionStatusEl = document.querySelector("#affection-status");
+const personaNameEl = document.querySelector("#persona-name");
+const personaPersonalityEl = document.querySelector("#persona-personality");
+const personaSpeakingStyleEl = document.querySelector("#persona-speaking-style");
+const personaBackgroundEl = document.querySelector("#persona-background");
+const personaExtraRulesEl = document.querySelector("#persona-extra-rules");
 const baseUrlEl = document.querySelector("#base-url");
 const modelEl = document.querySelector("#model");
 const apiKeyEl = document.querySelector("#api-key");
 const keyStatusEl = document.querySelector("#key-status");
 const temperatureEl = document.querySelector("#temperature");
 const maxHistoryEl = document.querySelector("#max-history");
+const testLlmButton = document.querySelector("#test-llm");
+const llmTestStatusEl = document.querySelector("#llm-test-status");
 const ttsProviderEl = document.querySelector("#tts-provider");
 const systemVoiceRow = document.querySelector("#system-voice-row");
 const voiceNameEl = document.querySelector("#voice-name");
@@ -22,7 +31,18 @@ const ttsTextLanguageEl = document.querySelector("#tts-text-language");
 const ttsPromptLanguageEl = document.querySelector("#tts-prompt-language");
 const ttsReferenceAudioEl = document.querySelector("#tts-reference-audio");
 const ttsPromptTextEl = document.querySelector("#tts-prompt-text");
+const ttsTextSplitMethodEl = document.querySelector("#tts-text-split-method");
 const ttsCustomBodyEl = document.querySelector("#tts-custom-body");
+const testTtsButton = document.querySelector("#test-tts");
+const ttsTestStatusEl = document.querySelector("#tts-test-status");
+const affectionEnabledEl = document.querySelector("#affection-enabled");
+const affectionLabelEl = document.querySelector("#affection-label");
+const affectionHappyThresholdEl = document.querySelector("#affection-happy-threshold");
+const affectionClickGainEl = document.querySelector("#affection-click-gain");
+const affectionChatGainEl = document.querySelector("#affection-chat-gain");
+const affectionDoubleClickGainEl = document.querySelector("#affection-double-click-gain");
+const affectionLongPressGainEl = document.querySelector("#affection-long-press-gain");
+const rapidClickEnergyCostEl = document.querySelector("#rapid-click-energy-cost");
 const rateEl = document.querySelector("#tts-rate");
 const pitchEl = document.querySelector("#tts-pitch");
 const rateValueEl = document.querySelector("#rate-value");
@@ -55,10 +75,29 @@ let config = {
     promptLanguage: "zh",
     promptText: "",
     referenceAudioPath: "",
+    textSplitMethod: "cut5",
     mediaType: "wav",
     customBodyTemplate: DEFAULT_CUSTOM_BODY,
     hasApiKey: false,
     canPersistApiKey: true,
+  },
+  persona: {
+    setupDone: false,
+    name: "",
+    personality: "",
+    speakingStyle: "",
+    background: "",
+    extraRules: "",
+  },
+  affection: {
+    enabled: true,
+    label: "好感",
+    clickGain: 1,
+    doubleClickGain: 3,
+    longPressGain: 2,
+    chatGain: 1,
+    rapidClickEnergyCost: 7,
+    happyThreshold: 50,
   },
 };
 let selectedVoiceName = "";
@@ -104,11 +143,21 @@ function updateProviderVisibility() {
 function renderConfig() {
   const assistant = config.assistant || {};
   const tts = config.tts || {};
+  const persona = config.persona || {};
+  const affection = config.affection || {};
+
+  personaNameEl.value = persona.name || "";
+  personaPersonalityEl.value = persona.personality || "";
+  personaSpeakingStyleEl.value = persona.speakingStyle || "";
+  personaBackgroundEl.value = persona.background || "";
+  personaExtraRulesEl.value = persona.extraRules || "";
+
   baseUrlEl.value = assistant.baseUrl || "";
   modelEl.value = assistant.model || "";
   apiKeyEl.value = "";
   temperatureEl.value = Number(assistant.temperature ?? 0.7).toFixed(1);
   maxHistoryEl.value = String(assistant.maxHistory || 12);
+
   ttsProviderEl.value = tts.enabled ? (tts.provider || "system") : "none";
   selectedVoiceName = tts.voiceName || "";
   updateVoiceOptions(selectedVoiceName);
@@ -120,15 +169,35 @@ function renderConfig() {
   ttsPromptLanguageEl.value = tts.promptLanguage || "zh";
   ttsReferenceAudioEl.value = tts.referenceAudioPath || "";
   ttsPromptTextEl.value = tts.promptText || "";
+  ttsTextSplitMethodEl.value = tts.textSplitMethod || "cut5";
   ttsCustomBodyEl.value = tts.customBodyTemplate || DEFAULT_CUSTOM_BODY;
   rateEl.value = String(tts.rate || 1);
   pitchEl.value = String(tts.pitch || 1);
+
+  affectionEnabledEl.checked = affection.enabled !== false;
+  affectionLabelEl.value = affection.label || "好感";
+  affectionHappyThresholdEl.value = String(affection.happyThreshold || 50);
+  affectionClickGainEl.value = String(affection.clickGain ?? 1);
+  affectionChatGainEl.value = String(affection.chatGain ?? 1);
+  affectionDoubleClickGainEl.value = String(affection.doubleClickGain ?? 3);
+  affectionLongPressGainEl.value = String(affection.longPressGain ?? 2);
+  rapidClickEnergyCostEl.value = String(affection.rapidClickEnergyCost ?? 7);
+
   updateRangeLabels();
   updateProviderVisibility();
 
+  const hasPersona = Boolean(
+    persona.name
+    || persona.personality
+    || persona.speakingStyle
+    || persona.background
+    || persona.extraRules,
+  );
+  personaStatusEl.textContent = hasPersona ? "已填写" : "待填写";
   const llmReady = Boolean(assistant.baseUrl && assistant.model);
   llmStatusEl.textContent = llmReady ? "已配置" : "未配置";
   ttsStatusEl.textContent = tts.enabled ? "已开启" : "关闭";
+  affectionStatusEl.textContent = affection.enabled === false ? "关闭" : "开启";
   keyStatusEl.textContent = assistant.hasApiKey
     ? "已有 LLM API key。留空保存会保留原 key。"
     : "没有 LLM API key；本地模型服务一般可以留空。";
@@ -169,13 +238,33 @@ function readConfigForm(includeEmptyKey = false) {
     promptLanguage: ttsPromptLanguageEl.value.trim() || "zh",
     promptText: ttsPromptTextEl.value,
     referenceAudioPath: ttsReferenceAudioEl.value,
+    textSplitMethod: ttsTextSplitMethodEl.value.trim() || "cut5",
     mediaType: ttsMediaTypeEl.value,
     customBodyTemplate: ttsCustomBodyEl.value.trim() || DEFAULT_CUSTOM_BODY,
   };
   const ttsKey = ttsApiKeyEl.value.trim();
   if (ttsKey || includeEmptyKey) tts.apiKey = ttsKey;
 
-  return { assistant, tts };
+  const persona = {
+    setupDone: true,
+    name: personaNameEl.value.trim(),
+    personality: personaPersonalityEl.value.trim(),
+    speakingStyle: personaSpeakingStyleEl.value.trim(),
+    background: personaBackgroundEl.value.trim(),
+    extraRules: personaExtraRulesEl.value.trim(),
+  };
+  const affection = {
+    enabled: affectionEnabledEl.checked,
+    label: affectionLabelEl.value.trim() || "好感",
+    happyThreshold: Number(affectionHappyThresholdEl.value || 50),
+    clickGain: Number(affectionClickGainEl.value || 0),
+    chatGain: Number(affectionChatGainEl.value || 0),
+    doubleClickGain: Number(affectionDoubleClickGainEl.value || 0),
+    longPressGain: Number(affectionLongPressGainEl.value || 0),
+    rapidClickEnergyCost: Number(rapidClickEnergyCostEl.value || 0),
+  };
+
+  return { assistant, tts, persona, affection };
 }
 
 async function saveConfig(includeEmptyKey = false) {
@@ -186,6 +275,56 @@ async function saveConfig(includeEmptyKey = false) {
     saveStatusEl.textContent = "设置已保存。";
   } finally {
     saveSettingsButton.disabled = false;
+  }
+}
+
+function chooseSystemVoice() {
+  const voices = getVoices();
+  if (!voices.length) return null;
+  return voices.find((voice) => voice.name === voiceNameEl.value) || voices[0];
+}
+
+function playSystemTtsTest() {
+  if (!("speechSynthesis" in window)) return false;
+  const utterance = new SpeechSynthesisUtterance("语音连接测试。");
+  const voice = chooseSystemVoice();
+  if (voice) utterance.voice = voice;
+  utterance.rate = Number(rateEl.value || 1);
+  utterance.pitch = Number(pitchEl.value || 1);
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+  return true;
+}
+
+async function testLlm() {
+  testLlmButton.disabled = true;
+  llmTestStatusEl.textContent = "正在测试 LLM...";
+  try {
+    const result = await window.desktopPet.testAssistantConnection(readConfigForm(false));
+    llmTestStatusEl.textContent = result.message || (result.ok ? "LLM 连接成功。" : "LLM 连接失败。");
+  } catch {
+    llmTestStatusEl.textContent = "LLM 测试请求失败。";
+  } finally {
+    testLlmButton.disabled = false;
+  }
+}
+
+async function testTts() {
+  testTtsButton.disabled = true;
+  ttsTestStatusEl.textContent = "正在测试 TTS...";
+  try {
+    const formConfig = readConfigForm(false);
+    const result = await window.desktopPet.testTtsConnection(formConfig);
+    ttsTestStatusEl.textContent = result.message || (result.ok ? "TTS 连接成功。" : "TTS 连接失败。");
+    if (result.audioDataUrl) {
+      new Audio(result.audioDataUrl).play().catch(() => {});
+    } else if (formConfig.tts.provider === "system" && result.ok && !playSystemTtsTest()) {
+      ttsTestStatusEl.textContent = "系统语音不可用。";
+    }
+  } catch {
+    ttsTestStatusEl.textContent = "TTS 测试请求失败。";
+  } finally {
+    testTtsButton.disabled = false;
   }
 }
 
@@ -200,6 +339,8 @@ async function initialize() {
 }
 
 saveSettingsButton.addEventListener("click", () => saveConfig(false));
+testLlmButton.addEventListener("click", testLlm);
+testTtsButton.addEventListener("click", testTts);
 clearKeyButton.addEventListener("click", () => {
   apiKeyEl.value = "";
   ttsApiKeyEl.value = "";
@@ -212,6 +353,9 @@ backToChatButton.addEventListener("click", () => {
 rateEl.addEventListener("input", updateRangeLabels);
 pitchEl.addEventListener("input", updateRangeLabels);
 ttsProviderEl.addEventListener("change", updateProviderVisibility);
+affectionEnabledEl.addEventListener("change", () => {
+  affectionStatusEl.textContent = affectionEnabledEl.checked ? "开启" : "关闭";
+});
 
 if ("speechSynthesis" in window) {
   window.speechSynthesis.addEventListener("voiceschanged", () => {

@@ -43,8 +43,27 @@ const DEFAULT_SETTINGS = {
     promptLanguage: "zh",
     promptText: "",
     referenceAudioPath: "",
+    textSplitMethod: "cut5",
     mediaType: "wav",
     customBodyTemplate: "{\"text\":\"{{text}}\"}",
+  },
+  persona: {
+    setupDone: false,
+    name: "",
+    personality: "",
+    speakingStyle: "",
+    background: "",
+    extraRules: "",
+  },
+  affection: {
+    enabled: true,
+    label: "好感",
+    clickGain: 1,
+    doubleClickGain: 3,
+    longPressGain: 2,
+    chatGain: 1,
+    rapidClickEnergyCost: 7,
+    happyThreshold: 50,
   },
 };
 const DEFAULT_PROFILE = {
@@ -255,6 +274,8 @@ function normalizeSettings(nextSettings) {
   nextSettings = nextSettings || {};
   const assistant = normalizeAssistantSettings(nextSettings?.assistant);
   const tts = normalizeTtsSettings(nextSettings?.tts);
+  const persona = normalizePersonaSettings(nextSettings?.persona);
+  const affection = normalizeAffectionSettings(nextSettings?.affection);
   const requestedCharacterId = (
     typeof nextSettings.characterId === "string" && nextSettings.characterId.trim()
       ? nextSettings.characterId.trim()
@@ -267,7 +288,17 @@ function normalizeSettings(nextSettings) {
   const restReminderMinutes = [0, 30, 60].includes(Number(nextSettings.restReminderMinutes))
     ? Number(nextSettings.restReminderMinutes)
     : 0;
-  return { characterId, expressionMode, scale, alwaysOnTop, restReminderMinutes, assistant, tts };
+  return {
+    characterId,
+    expressionMode,
+    scale,
+    alwaysOnTop,
+    restReminderMinutes,
+    assistant,
+    tts,
+    persona,
+    affection,
+  };
 }
 
 function normalizeAssistantSettings(rawAssistant = {}) {
@@ -292,7 +323,10 @@ function normalizeTtsSettings(rawTts = {}) {
   const promptLanguage = normalizeCompactText(raw.promptLanguage, 16) || DEFAULT_SETTINGS.tts.promptLanguage;
   const promptText = normalizeLongText(raw.promptText, 1000);
   const referenceAudioPath = normalizeLongText(raw.referenceAudioPath, 1000);
-  const mediaType = ["wav", "mp3", "ogg"].includes(raw.mediaType) ? raw.mediaType : DEFAULT_SETTINGS.tts.mediaType;
+  const textSplitMethod = normalizeCompactText(raw.textSplitMethod, 32) || DEFAULT_SETTINGS.tts.textSplitMethod;
+  const mediaType = ["wav", "ogg", "aac", "raw", "mp3"].includes(raw.mediaType)
+    ? raw.mediaType
+    : DEFAULT_SETTINGS.tts.mediaType;
   const customBodyTemplate = normalizeLongText(
     raw.customBodyTemplate,
     4000,
@@ -310,8 +344,45 @@ function normalizeTtsSettings(rawTts = {}) {
     promptLanguage,
     promptText,
     referenceAudioPath,
+    textSplitMethod,
     mediaType,
     customBodyTemplate,
+  };
+}
+
+function normalizePersonaSettings(rawPersona = {}) {
+  const raw = { ...DEFAULT_SETTINGS.persona, ...(rawPersona || {}) };
+  return {
+    setupDone: raw.setupDone === true,
+    name: normalizeCompactText(raw.name, 80),
+    personality: normalizeLongText(raw.personality, 1200),
+    speakingStyle: normalizeLongText(raw.speakingStyle, 1200),
+    background: normalizeLongText(raw.background, 1600),
+    extraRules: normalizeLongText(raw.extraRules, 1600),
+  };
+}
+
+function normalizeAffectionSettings(rawAffection = {}) {
+  const raw = { ...DEFAULT_SETTINGS.affection, ...(rawAffection || {}) };
+  return {
+    enabled: raw.enabled !== false,
+    label: normalizeCompactText(raw.label, 24) || DEFAULT_SETTINGS.affection.label,
+    clickGain: Math.round(clampNumber(raw.clickGain, 0, 10, DEFAULT_SETTINGS.affection.clickGain)),
+    doubleClickGain: Math.round(clampNumber(
+      raw.doubleClickGain,
+      0,
+      10,
+      DEFAULT_SETTINGS.affection.doubleClickGain,
+    )),
+    longPressGain: Math.round(clampNumber(raw.longPressGain, 0, 10, DEFAULT_SETTINGS.affection.longPressGain)),
+    chatGain: Math.round(clampNumber(raw.chatGain, 0, 10, DEFAULT_SETTINGS.affection.chatGain)),
+    rapidClickEnergyCost: Math.round(clampNumber(
+      raw.rapidClickEnergyCost,
+      0,
+      20,
+      DEFAULT_SETTINGS.affection.rapidClickEnergyCost,
+    )),
+    happyThreshold: Math.round(clampNumber(raw.happyThreshold, 1, 100, DEFAULT_SETTINGS.affection.happyThreshold)),
   };
 }
 
@@ -524,6 +595,14 @@ function createCompanionSettingsWindow() {
   });
 }
 
+function maybeShowInitialPersonaSettings() {
+  if (settings.persona?.setupDone) return;
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    createCompanionSettingsWindow();
+  }, 900);
+}
+
 function updateSettings(patch) {
   const nextSettings = {
     ...settings,
@@ -535,6 +614,14 @@ function updateSettings(patch) {
     tts: {
       ...(settings.tts || DEFAULT_SETTINGS.tts),
       ...((patch && patch.tts) || {}),
+    },
+    persona: {
+      ...(settings.persona || DEFAULT_SETTINGS.persona),
+      ...((patch && patch.persona) || {}),
+    },
+    affection: {
+      ...(settings.affection || DEFAULT_SETTINGS.affection),
+      ...((patch && patch.affection) || {}),
     },
   };
   settings = normalizeSettings(nextSettings);
@@ -568,9 +655,10 @@ function todayKey() {
 
 function recordLaunch() {
   const today = todayKey();
+  const affection = settings.affection || DEFAULT_SETTINGS.affection;
   if (profile.lastLaunchDate !== today) {
     profile.energy = clamp(profile.energy + 15, 0, 100);
-    profile.mood = profile.affection >= 45 ? "happy" : "calm";
+    profile.mood = affection.enabled && profile.affection >= affection.happyThreshold ? "happy" : "calm";
     profile.lastLaunchDate = today;
     writeProfile();
   }
@@ -589,27 +677,33 @@ function moodText() {
 function updateMoodFromInteraction(kind) {
   const now = Date.now();
   const rapid = now - profile.lastInteractionAt < 700;
+  const affection = settings.affection || DEFAULT_SETTINGS.affection;
+  const addAffection = (amount) => {
+    if (affection.enabled) {
+      profile.affection = clamp(profile.affection + amount, 0, 100);
+    }
+  };
   profile.totalInteractions += 1;
   profile.lastInteractionAt = now;
 
   if (kind === "doubleClick") {
-    profile.affection = clamp(profile.affection + 3, 0, 100);
+    addAffection(affection.doubleClickGain);
     profile.energy = clamp(profile.energy - 4, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "happy";
   } else if (kind === "chat") {
-    profile.affection = clamp(profile.affection + 1, 0, 100);
+    addAffection(affection.chatGain);
     profile.energy = clamp(profile.energy - 1, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "happy";
   } else if (kind === "longPress") {
-    profile.affection = clamp(profile.affection + 2, 0, 100);
+    addAffection(affection.longPressGain);
     profile.energy = clamp(profile.energy + 1, 0, 100);
     profile.mood = profile.energy < 20 ? "tired" : "calm";
   } else {
-    profile.affection = clamp(profile.affection + (rapid ? 0 : 1), 0, 100);
-    profile.energy = clamp(profile.energy - (rapid ? 7 : 2), 0, 100);
+    addAffection(rapid ? 0 : affection.clickGain);
+    profile.energy = clamp(profile.energy - (rapid ? affection.rapidClickEnergyCost : 2), 0, 100);
     if (rapid) profile.mood = "annoyed";
     else if (profile.energy < 20) profile.mood = "tired";
-    else if (profile.affection >= 50) profile.mood = "happy";
+    else if (affection.enabled && profile.affection >= affection.happyThreshold) profile.mood = "happy";
     else profile.mood = "calm";
   }
 
@@ -644,6 +738,8 @@ function publicChatConfig() {
       hasApiKey: Boolean(ttsApiKey),
       canPersistApiKey: safeStorage.isEncryptionAvailable(),
     },
+    persona: { ...(settings.persona || DEFAULT_SETTINGS.persona) },
+    affection: { ...(settings.affection || DEFAULT_SETTINGS.affection) },
   };
 }
 
@@ -666,9 +762,41 @@ function applyChatConfigPatch(patch = {}) {
   const settingsPatch = {
     assistant: assistantPatch,
     tts: ttsPatch,
+    persona: { ...(patch.persona || {}), setupDone: true },
+    affection: { ...(patch.affection || {}) },
   };
   updateSettings(settingsPatch);
   return publicChatConfig();
+}
+
+function settingsFromChatConfigPatch(patch = {}) {
+  const assistantPatch = { ...(patch.assistant || {}) };
+  if (assistantPatch.apiKey === undefined) delete assistantPatch.apiKey;
+  const ttsPatch = { ...(patch.tts || {}) };
+  if (ttsPatch.apiKey === undefined) delete ttsPatch.apiKey;
+  if (ttsPatch.provider && ttsPatch.enabled === undefined) {
+    ttsPatch.enabled = ttsPatch.provider !== "none";
+  }
+  return normalizeSettings({
+    ...settings,
+    assistant: {
+      ...(settings.assistant || DEFAULT_SETTINGS.assistant),
+      ...assistantPatch,
+    },
+    tts: {
+      ...(settings.tts || DEFAULT_SETTINGS.tts),
+      ...ttsPatch,
+    },
+    persona: {
+      ...(settings.persona || DEFAULT_SETTINGS.persona),
+      ...(patch.persona || {}),
+      setupDone: true,
+    },
+    affection: {
+      ...(settings.affection || DEFAULT_SETTINGS.affection),
+      ...(patch.affection || {}),
+    },
+  });
 }
 
 function addChatMessage(role, content) {
@@ -721,10 +849,22 @@ function activeCharacterStyle() {
 
 function personaInstruction() {
   const pack = getCharacterPack();
-  const characterName = pack?.name || "Desktop Pet";
+  const persona = settings.persona || DEFAULT_SETTINGS.persona;
+  const affection = settings.affection || DEFAULT_SETTINGS.affection;
+  const characterName = persona.name || pack?.name || "Desktop Pet";
+  const personaLines = [
+    persona.personality ? `性格：${persona.personality}` : "",
+    persona.speakingStyle ? `说话方式：${persona.speakingStyle}` : "",
+    persona.background ? `背景设定：${persona.background}` : "",
+    persona.extraRules ? `额外规则：${persona.extraRules}` : "",
+  ].filter(Boolean);
+  const relationshipLine = affection.enabled
+    ? `当前互动状态：${affection.label} ${profile.affection}/100，活力 ${profile.energy}/100，心情 ${moodText()}。根据亲近程度自然调整语气，但不要主动报数。`
+    : `当前互动状态：活力 ${profile.energy}/100，心情 ${moodText()}。`;
   return [
     `你是 ${characterName}，一个会在桌面上陪人聊天的小角色。`,
-    `角色风格：${activeCharacterStyle()}`,
+    personaLines.length ? personaLines.join("\n") : `角色风格：${activeCharacterStyle()}`,
+    relationshipLine,
     "默认用中文回答。回复要自然、简短、有陪伴感。",
     "不要主动索要隐私信息。除非对方明确要求，不要输出长篇列表、表格或代码块。",
   ].join("\n");
@@ -802,8 +942,9 @@ async function requestAssistantReply(userText) {
     });
 
     if (!response.ok) {
+      const detail = await responseErrorText(response);
       return {
-        reply: `LLM 请求失败了，状态码 ${response.status}。检查一下 Base URL、模型名和 API key。`,
+        reply: `LLM 请求失败了，状态码 ${response.status}${detail ? `：${detail}` : ""}。检查一下 Base URL、模型名和 API key。`,
         action: pickAvailableAction(["failed", "review"]),
         ok: false,
       };
@@ -836,6 +977,71 @@ async function requestAssistantReply(userText) {
   }
 }
 
+async function testAssistantConnection(_event, patch = {}) {
+  const candidate = settingsFromChatConfigPatch(patch);
+  const assistant = candidate.assistant || DEFAULT_SETTINGS.assistant;
+  if (!assistant.baseUrl || !assistant.model) {
+    return { ok: false, message: "请先填写 Base URL 和模型名。" };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (assistant.apiKey) headers.Authorization = `Bearer ${assistant.apiKey}`;
+    const response = await fetch(llmEndpoint(assistant.baseUrl), {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: assistant.model,
+        messages: [
+          { role: "system", content: "你是连接测试助手。请只用一句短中文回复。" },
+          { role: "user", content: "请回复：连接成功" },
+        ],
+        temperature: 0,
+        stream: false,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await responseErrorText(response);
+      return { ok: false, message: `LLM 请求失败，状态码 ${response.status}${detail ? `：${detail}` : ""}。` };
+    }
+    const data = await response.json();
+    const preview = compactAssistantReply(data?.choices?.[0]?.message?.content).slice(0, 80);
+    if (!preview) return { ok: false, message: "LLM 返回了空回复。" };
+    return { ok: true, message: `LLM 连接成功：${preview}` };
+  } catch (error) {
+    const message = error?.name === "AbortError" ? "LLM 测试超时。" : "LLM 测试请求失败。";
+    return { ok: false, message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function testTtsConnection(_event, patch = {}) {
+  const candidate = settingsFromChatConfigPatch(patch);
+  const tts = candidate.tts || DEFAULT_SETTINGS.tts;
+  if (!tts.enabled || tts.provider === "none") {
+    return { ok: false, message: "TTS 当前关闭。请选择一个语音后端。" };
+  }
+  if (tts.provider === "system") {
+    return { ok: true, message: "系统语音可用；保存后桌宠回复会朗读。" };
+  }
+  if (tts.provider === "gptsovits" && !tts.referenceAudioPath) {
+    return { ok: false, message: "请先填写参考音频路径；官方 GPT-SoVITS /tts 通常需要 ref_audio_path。" };
+  }
+  const result = await synthesizeSpeechWithSettings("语音连接测试。", candidate);
+  if (!result.ok) {
+    return { ok: false, message: `TTS 测试失败：${result.error || "unknown_error"}` };
+  }
+  return {
+    ok: true,
+    message: "TTS 连接成功，已生成测试音频。",
+    audioDataUrl: result.audioDataUrl,
+  };
+}
+
 async function sendChatMessage(_event, rawText) {
   const text = cleanUserMessage(rawText);
   if (!text) {
@@ -864,8 +1070,7 @@ function clearChatHistory() {
   return publicChatHistory();
 }
 
-function ttsEndpoint() {
-  const tts = settings.tts || DEFAULT_SETTINGS.tts;
+function ttsEndpoint(tts = settings.tts || DEFAULT_SETTINGS.tts) {
   if (tts.provider === "gptsovits") {
     return tts.endpoint || "http://127.0.0.1:9880/tts";
   }
@@ -881,8 +1086,7 @@ function interpolateTemplate(template, text) {
   return template.replaceAll("{{text}}", escapedText);
 }
 
-function gptSovitsPayload(text) {
-  const tts = settings.tts || DEFAULT_SETTINGS.tts;
+function gptSovitsPayload(text, tts = settings.tts || DEFAULT_SETTINGS.tts) {
   return {
     text,
     text_lang: tts.textLanguage || "zh",
@@ -890,6 +1094,8 @@ function gptSovitsPayload(text) {
     prompt_text: tts.promptText || "",
     prompt_lang: tts.promptLanguage || "zh",
     media_type: tts.mediaType || "wav",
+    text_split_method: tts.textSplitMethod || "cut5",
+    batch_size: 1,
     speed_factor: tts.rate || 1,
     streaming_mode: false,
   };
@@ -905,14 +1111,14 @@ function appendQuery(url, params) {
   return nextUrl.toString();
 }
 
-function audioContentType(response, provider) {
+function audioContentType(response, provider, tts = settings.tts || DEFAULT_SETTINGS.tts) {
   const contentType = response.headers.get("content-type");
   if (contentType && contentType.includes("audio/")) return contentType.split(";")[0];
-  if (provider === "gptsovits") return `audio/${settings.tts.mediaType || "wav"}`;
+  if (provider === "gptsovits") return `audio/${tts.mediaType || "wav"}`;
   return contentType || "audio/mpeg";
 }
 
-async function audioDataFromResponse(response, provider) {
+async function audioDataFromResponse(response, provider, tts = settings.tts || DEFAULT_SETTINGS.tts) {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const data = await response.json();
@@ -925,27 +1131,41 @@ async function audioDataFromResponse(response, provider) {
       const audioResponse = await fetch(audioValue);
       if (!audioResponse.ok) return null;
       const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-      return `data:${audioContentType(audioResponse, provider)};base64,${audioBuffer.toString("base64")}`;
+      return `data:${audioContentType(audioResponse, provider, tts)};base64,${audioBuffer.toString("base64")}`;
     }
     if (typeof audioValue === "string") {
-      const mediaType = provider === "gptsovits" ? settings.tts.mediaType : "mpeg";
+      const mediaType = provider === "gptsovits" ? tts.mediaType : "mpeg";
       return `data:audio/${mediaType || "mpeg"};base64,${audioValue}`;
     }
     return null;
   }
   const buffer = Buffer.from(await response.arrayBuffer());
   if (!buffer.length) return null;
-  return `data:${audioContentType(response, provider)};base64,${buffer.toString("base64")}`;
+  return `data:${audioContentType(response, provider, tts)};base64,${buffer.toString("base64")}`;
 }
 
-async function synthesizeSpeech(_event, rawText) {
+async function responseErrorText(response) {
+  try {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await response.json();
+      const message = data.message || data.error || data.Exception || JSON.stringify(data);
+      return String(message).replace(/\s+/g, " ").slice(0, 160);
+    }
+    return (await response.text()).replace(/\s+/g, " ").slice(0, 160);
+  } catch {
+    return "";
+  }
+}
+
+async function synthesizeSpeechWithSettings(rawText, nextSettings = settings) {
   const text = compactAssistantReply(rawText).slice(0, 800);
-  const tts = settings.tts || DEFAULT_SETTINGS.tts;
+  const tts = nextSettings.tts || DEFAULT_SETTINGS.tts;
   if (!text || !tts.enabled || ["none", "system"].includes(tts.provider)) {
     return { ok: false, skipped: true };
   }
 
-  const endpoint = ttsEndpoint();
+  const endpoint = ttsEndpoint(tts);
   if (!endpoint) {
     return { ok: false, error: "missing_tts_endpoint" };
   }
@@ -963,7 +1183,7 @@ async function synthesizeSpeech(_event, rawText) {
     };
 
     if (tts.provider === "gptsovits") {
-      const payload = gptSovitsPayload(text);
+      const payload = gptSovitsPayload(text, tts);
       if (tts.requestMode === "query") {
         url = appendQuery(endpoint, payload);
         requestOptions = { method: "GET", headers, signal: controller.signal };
@@ -977,8 +1197,11 @@ async function synthesizeSpeech(_event, rawText) {
     }
 
     const response = await fetch(url, requestOptions);
-    if (!response.ok) return { ok: false, error: `tts_status_${response.status}` };
-    const audioDataUrl = await audioDataFromResponse(response, tts.provider);
+    if (!response.ok) {
+      const detail = await responseErrorText(response);
+      return { ok: false, error: detail ? `tts_status_${response.status}: ${detail}` : `tts_status_${response.status}` };
+    }
+    const audioDataUrl = await audioDataFromResponse(response, tts.provider, tts);
     if (!audioDataUrl) return { ok: false, error: "empty_audio" };
     return { ok: true, audioDataUrl };
   } catch (error) {
@@ -986,6 +1209,10 @@ async function synthesizeSpeech(_event, rawText) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function synthesizeSpeech(_event, rawText) {
+  return synthesizeSpeechWithSettings(rawText, settings);
 }
 
 function showCurrentTime() {
@@ -1038,15 +1265,17 @@ function showContextMenu() {
     checked: settings.restReminderMinutes === item.value,
     click: () => updateSettings({ restReminderMinutes: item.value }),
   }));
+  const affection = settings.affection || DEFAULT_SETTINGS.affection;
+  const statusItems = [
+    { label: `心情：${moodText()}`, enabled: false },
+    ...(affection.enabled ? [{ label: `${affection.label}：${profile.affection}`, enabled: false }] : []),
+    { label: `活力：${profile.energy}`, enabled: false },
+  ];
 
   const menu = Menu.buildFromTemplate([
     {
       label: "状态",
-      submenu: [
-        { label: `心情：${moodText()}`, enabled: false },
-        { label: `好感：${profile.affection}`, enabled: false },
-        { label: `活力：${profile.energy}`, enabled: false },
-      ],
+      submenu: statusItems,
     },
     {
       label: "角色",
@@ -1156,6 +1385,8 @@ app.whenReady().then(() => {
   ipcMain.handle("get-app-state", () => appState());
   ipcMain.handle("get-chat-state", () => chatState());
   ipcMain.handle("save-chat-config", (_event, patch) => applyChatConfigPatch(patch));
+  ipcMain.handle("test-assistant-connection", testAssistantConnection);
+  ipcMain.handle("test-tts-connection", testTtsConnection);
   ipcMain.handle("send-chat-message", sendChatMessage);
   ipcMain.handle("clear-chat-history", clearChatHistory);
   ipcMain.handle("synthesize-speech", synthesizeSpeech);
@@ -1193,6 +1424,7 @@ app.whenReady().then(() => {
   }
 
   scheduleRestReminder();
+  maybeShowInitialPersonaSettings();
 });
 
 app.on("window-all-closed", () => app.quit());

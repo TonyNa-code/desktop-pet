@@ -40,7 +40,7 @@ button:disabled {
 
 .settings-shell {
   display: grid;
-  grid-template-rows: auto 1fr 1fr auto;
+  grid-template-rows: auto;
   gap: 14px;
   height: 100vh;
   box-sizing: border-box;
@@ -166,6 +166,27 @@ textarea:focus {
   gap: 8px;
 }
 
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.button-row .hint {
+  min-width: 0;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-row input {
+  width: auto;
+  min-height: auto;
+}
+
 .sub-panel {
   display: grid;
   gap: 12px;
@@ -191,16 +212,18 @@ textarea:focus {
 
 @media (max-width: 600px) {
   .settings-shell {
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto;
   }
 
   .split-row,
-  .settings-footer {
+  .settings-footer,
+  .button-row {
     grid-template-columns: 1fr;
   }
 
   .settings-header,
-  .settings-footer {
+  .settings-footer,
+  .button-row {
     align-items: stretch;
     flex-direction: column;
   }
