@@ -185,8 +185,18 @@
             <input id="affection-label" type="text" placeholder="好感" spellcheck="false" />
           </label>
           <label>
-            <span>开心阈值</span>
+            <span>当前数值</span>
+            <input id="affection-current" type="number" min="0" max="100" step="1" />
+          </label>
+        </div>
+        <div class="split-row">
+          <label>
+            <span>中阶段阈值</span>
             <input id="affection-happy-threshold" type="number" min="1" max="100" step="1" />
+          </label>
+          <label>
+            <span>高阶段阈值</span>
+            <input id="affection-close-threshold" type="number" min="1" max="100" step="1" />
           </label>
         </div>
         <div class="split-row">
@@ -209,10 +219,33 @@
             <input id="affection-long-press-gain" type="number" min="0" max="10" step="1" />
           </label>
         </div>
+        <div class="split-row">
+          <label>
+            <span>增长冷却秒数</span>
+            <input id="affection-growth-cooldown" type="number" min="0" max="3600" step="1" />
+          </label>
+          <label>
+            <span>每日增长上限</span>
+            <input id="affection-daily-limit" type="number" min="0" max="100" step="1" />
+          </label>
+        </div>
         <label>
           <span>连续点击消耗活力</span>
           <input id="rapid-click-energy-cost" type="number" min="0" max="20" step="1" />
         </label>
+        <label>
+          <span>低阶段语气</span>
+          <textarea id="affection-low-tone" rows="3" spellcheck="false"></textarea>
+        </label>
+        <label>
+          <span>中阶段语气</span>
+          <textarea id="affection-medium-tone" rows="3" spellcheck="false"></textarea>
+        </label>
+        <label>
+          <span>高阶段语气</span>
+          <textarea id="affection-high-tone" rows="3" spellcheck="false"></textarea>
+        </label>
+        <p id="affection-rule-status" class="hint"></p>
       </section>
 
       <footer class="settings-footer">
