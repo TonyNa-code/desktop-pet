@@ -9,18 +9,48 @@ body {
 }
 
 body {
-  display: grid;
-  place-items: center;
+  position: relative;
+  pointer-events: none;
 }
 
 #pet {
+  position: absolute;
+  left: 0;
+  bottom: 0;
   width: 100vw;
-  height: 100vh;
+  height: calc(100vh - 46px);
   display: block;
   image-rendering: auto;
   cursor: grab;
+  pointer-events: auto;
 }
 
 #pet.dragging {
   cursor: grabbing;
+}
+
+#speech-bubble {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  max-width: calc(100vw - 16px);
+  min-height: 26px;
+  padding: 7px 10px;
+  border: 1px solid rgba(93, 86, 76, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 18px rgba(44, 39, 33, 0.14);
+  color: #3d3730;
+  font: 500 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transform: translate(-50%, -8px) scale(0.98);
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+#speech-bubble.visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
 }

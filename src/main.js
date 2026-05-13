@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const BASE_SIZE = { width: 192, height: 208 };
+const BUBBLE_HEIGHT = 46;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -202,7 +203,7 @@ function nearestScale(scale) {
 function displaySize(scale = settings.scale) {
   return {
     width: Math.round(BASE_SIZE.width * scale),
-    height: Math.round(BASE_SIZE.height * scale),
+    height: Math.round(BASE_SIZE.height * scale) + BUBBLE_HEIGHT,
   };
 }
 
@@ -315,9 +316,15 @@ function updateMoodFromInteraction(kind) {
   }
 }
 
-function notify(title, body) {
+function sendPetMessage(text, action = "waving") {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("pet-message", { text, action });
+}
+
+function notify(title, body, action) {
+  sendPetMessage(body || title, action);
   if (!Notification.isSupported()) return;
-  new Notification({ title, body, silent: false }).show();
+  new Notification({ title, body, silent: true }).show();
 }
 
 function showCurrentTime() {
@@ -325,14 +332,14 @@ function showCurrentTime() {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date());
-  notify("Desktop Pet", `现在是 ${time}`);
+  notify("Desktop Pet", `现在是 ${time}`, "waving");
 }
 
 function startFocusTimer() {
   clearTimeout(focusTimer);
-  notify("专注开始", "25 分钟后会提醒休息。");
+  notify("专注开始", "25 分钟后提醒你休息。", "review");
   focusTimer = setTimeout(() => {
-    notify("专注结束", "可以休息一下了。");
+    notify("专注结束", "可以休息一下了。", "waving");
   }, 25 * 60 * 1000);
 }
 
@@ -341,7 +348,7 @@ function scheduleRestReminder() {
   restReminderTimer = null;
   if (!settings.restReminderMinutes) return;
   restReminderTimer = setInterval(() => {
-    notify("休息提醒", "起来走动一下，放松眼睛。");
+    notify("休息提醒", "起来走动一下，放松眼睛。", "waving");
   }, settings.restReminderMinutes * 60 * 1000);
 }
 

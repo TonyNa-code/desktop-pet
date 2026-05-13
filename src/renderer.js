@@ -1,5 +1,8 @@
 const canvas = document.querySelector("#pet");
+const speechBubble = document.querySelector("#speech-bubble");
 const ctx = canvas.getContext("2d", { alpha: true });
+const SINGLE_CLICK_DELAY = 280;
+const CLICK_ONLY_COOLDOWN = 220;
 
 const FALLBACK_CHARACTER = {
   id: "default",
@@ -44,9 +47,12 @@ let clickExpressionIndex = 0;
 let dragInterval;
 let dragStart = null;
 let didDrag = false;
-let lastClickAt = 0;
 let clickTimer;
+let clickOnlyReadyAt = 0;
+let ignoreSingleClicksUntil = 0;
 let hoverReadyAt = 0;
+let bubbleTimer;
+let didShowStartupGreeting = false;
 
 function draw() {
   if (!spriteImage) return;
@@ -106,6 +112,7 @@ function temporaryDuration(nextState) {
 }
 
 function playTemporary(nextState, duration = temporaryDuration(nextState)) {
+  if (!character.states[nextState]) return;
   window.clearTimeout(idleTimer);
   temporaryToken += 1;
   const token = temporaryToken;
@@ -134,6 +141,7 @@ function nextStaticExpression() {
 }
 
 function setStaticExpression(nextState, nextFrame) {
+  if (!character.states[nextState]) return;
   window.clearTimeout(idleTimer);
   temporaryToken += 1;
   state = nextState;
@@ -190,6 +198,7 @@ function resetAfterSettingsChange() {
     setState("idle");
     scheduleIdleBehavior();
   }
+  scheduleStartupGreeting();
 }
 
 function handleClick() {
@@ -205,6 +214,8 @@ function handleClick() {
 
 function handleDoubleClick() {
   window.clearTimeout(clickTimer);
+  ignoreSingleClicksUntil = performance.now() + 360;
+  if (settings.expressionMode === "clickOnly") return;
   window.desktopPet.recordInteraction("doubleClick");
   playTemporary("jumping", 1200);
 }
@@ -221,10 +232,18 @@ function handleLongPress() {
 
 function scheduleSingleClick() {
   window.clearTimeout(clickTimer);
+  const scheduledAt = performance.now();
   clickTimer = window.setTimeout(() => {
-    lastClickAt = performance.now();
+    if (scheduledAt < ignoreSingleClicksUntil) return;
     handleClick();
-  }, 180);
+  }, SINGLE_CLICK_DELAY);
+}
+
+function handleClickOnlyPointerClick() {
+  const now = performance.now();
+  if (now < clickOnlyReadyAt) return;
+  clickOnlyReadyAt = now + CLICK_ONLY_COOLDOWN;
+  handleClick();
 }
 
 function beginDrag(event) {
@@ -259,7 +278,6 @@ function endDrag(event) {
   canvas.classList.remove("dragging");
 
   const heldDuration = performance.now() - dragStart.time;
-  const clickedRecently = performance.now() - lastClickAt < 250;
   dragStart = null;
 
   if (didDrag) {
@@ -277,8 +295,43 @@ function endDrag(event) {
     handleLongPress();
     return;
   }
-  if (event.detail > 1 || clickedRecently) return;
+  if (settings.expressionMode === "clickOnly") {
+    if (event.detail > 1) return;
+    handleClickOnlyPointerClick();
+    return;
+  }
+  if (event.detail > 1) return;
   scheduleSingleClick();
+}
+
+function showBubble(text, duration = 2600) {
+  if (!speechBubble || !text) return;
+  window.clearTimeout(bubbleTimer);
+  speechBubble.textContent = text;
+  speechBubble.classList.add("visible");
+  bubbleTimer = window.setTimeout(() => {
+    speechBubble.classList.remove("visible");
+  }, duration);
+}
+
+function handlePetMessage(message = {}) {
+  const text = typeof message === "string" ? message : message.text;
+  const action = typeof message === "object" ? message.action : "";
+  showBubble(text);
+  if (!dragStart && action && character.states[action]) {
+    playTemporary(action, Math.max(temporaryDuration(action), 1200));
+  }
+}
+
+function scheduleStartupGreeting() {
+  if (didShowStartupGreeting) return;
+  didShowStartupGreeting = true;
+  window.setTimeout(() => {
+    showBubble("早呀，今天也一起加油。", 3000);
+    if (!dragStart && character.states.waving) {
+      playTemporary("waving", 1200);
+    }
+  }, 650);
 }
 
 function loadSprite() {
@@ -316,6 +369,7 @@ window.addEventListener("contextmenu", (event) => {
 });
 
 window.desktopPet.onAppStateUpdated(applyAppState);
+window.desktopPet.onPetMessage(handlePetMessage);
 
 window.desktopPet.getAppState()
   .then((initialAppState) => {
