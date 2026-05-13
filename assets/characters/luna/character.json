@@ -55,16 +55,23 @@
       "row": 6,
       "frames": 1,
       "interval": 540
+    },
+    "happy": {
+      "row": 7,
+      "frames": 1,
+      "interval": 520
     }
   },
   "automaticActions": [
     "waiting",
     "review",
+    "happy",
     "waving",
     "jumping"
   ],
   "clickActions": [
     "waving",
+    "happy",
     "review",
     "failed",
     "jumping",
@@ -85,7 +92,11 @@
     },
     {
       "state": "waving",
-      "frame": 2
+      "frame": 1
+    },
+    {
+      "state": "happy",
+      "frame": 0
     },
     {
       "state": "failed",
