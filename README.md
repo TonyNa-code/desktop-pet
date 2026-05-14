@@ -1,8 +1,13 @@
 # Desktop Pet
 
-一个可以在 Windows / macOS / Linux 上运行的通用桌宠模板。它使用 Electron 做透明置顶窗口，通过角色包加载 spritesheet、动作配置和预览图；当前仓库内置一套默认角色素材，以后可以按同样规格替换成其他角色。
+一个可以在 Windows / macOS / Linux 上运行的通用桌宠模板。它使用 Electron 做透明置顶窗口，通过角色包加载 spritesheet、动作配置和预览图；当前仓库内置两套角色素材，以后可以按同样规格替换成其他角色。
 
-![Desktop pet animation contact sheet](assets/characters/default/preview.png)
+## Built-In Characters
+
+| Default Character | Luna |
+| --- | --- |
+| ![Default character preview](assets/characters/default/preview.png) | ![Luna character preview](assets/characters/luna/preview.png) |
+| 动态动作样例，包含待机、移动、挥手、跳起、失败和思考动作。 | 偏静态表情动作包，包含傲娇、害羞、惊讶、开心、思考等表情状态。 |
 
 ## For Beginners
 
@@ -90,22 +95,32 @@ API key 只保存在本机。应用会优先用系统安全存储加密；如果
 
 ## Character Packs
 
-默认角色包在：
+内置角色包：
+
+- `default`：动态动作样例，8 行动作表，适合参考基础动画规格。
+- `luna`：偏静态表情动作包，保留多种表情状态，适合参考静态角色扩展方式。
+
+角色包都放在：
 
 ```text
-assets/characters/default/
-  character.json
-  preview.png
-  sprite.png
+assets/characters/
+  default/
+    character.json
+    preview.png
+    sprite.png
+  luna/
+    character.json
+    preview.png
+    sprite.png
 ```
 
 角色包约定：
 
 - `character.json`：角色名称、动作行、帧数、播放速度
-- `sprite.png`：8 列 spritesheet，默认单帧 768 x 832
+- `sprite.png`：spritesheet，默认 8 列，单帧 768 x 832
 - `preview.png`：预览图
 
-默认动作行顺序：
+基础动作行顺序：
 
 1. idle
 2. runningRight
@@ -116,7 +131,7 @@ assets/characters/default/
 7. running
 8. review
 
-新增角色时，在 `assets/characters/` 下增加一个新文件夹，并提供同样结构的三个文件。应用右键菜单会显示可用角色。
+新增角色时，在 `assets/characters/` 下增加一个新文件夹，并提供同样结构的三个文件。角色可以是完整动态动作表，也可以是以静态表情为主的动作包。应用右键菜单会显示可用角色。
 
 更完整的角色替换步骤、动作表规格和 AI 生图提示词模板见 [角色更换与制作指南.md](角色更换与制作指南.md)。
 
