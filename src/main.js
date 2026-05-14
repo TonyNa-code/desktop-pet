@@ -57,7 +57,7 @@ const DEFAULT_SETTINGS = {
     extraRules: "",
   },
   affection: {
-    enabled: true,
+    enabled: false,
     label: "好感",
     minutesPerPoint: 10,
     activeWindowMinutes: 15,
