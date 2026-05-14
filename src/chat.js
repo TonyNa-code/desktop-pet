@@ -39,7 +39,7 @@ function isLlmReady() {
 }
 
 function statusText() {
-  if (!isLlmReady()) return "还没有配置 LLM。";
+  if (!isLlmReady()) return "还没有配置聊天模型。";
   return config.tts?.enabled ? "已连接，回复会朗读。" : "已连接，朗读关闭。";
 }
 
@@ -56,7 +56,7 @@ function renderHistory() {
     empty.className = "empty-state";
     empty.innerHTML = isLlmReady()
       ? "<b>还没有消息</b><span>输入一句话开始聊天。</span>"
-      : "<b>需要先配置 LLM</b><span>点右上角设置，填入 Base URL 和模型名。</span>";
+      : "<b>需要先配置聊天模型</b><span>点右上角设置，填入 Base URL 和模型名。</span>";
     messagesEl.append(empty);
     return;
   }

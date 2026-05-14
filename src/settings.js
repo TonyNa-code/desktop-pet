@@ -38,6 +38,8 @@ const ttsTestStatusEl = document.querySelector("#tts-test-status");
 const affectionEnabledEl = document.querySelector("#affection-enabled");
 const affectionLabelEl = document.querySelector("#affection-label");
 const affectionCurrentEl = document.querySelector("#affection-current");
+const affectionMinutesPerPointEl = document.querySelector("#affection-minutes-per-point");
+const affectionActiveWindowEl = document.querySelector("#affection-active-window");
 const affectionHappyThresholdEl = document.querySelector("#affection-happy-threshold");
 const affectionCloseThresholdEl = document.querySelector("#affection-close-threshold");
 const affectionLowToneEl = document.querySelector("#affection-low-tone");
@@ -91,8 +93,10 @@ let config = {
     extraRules: "",
   },
   affection: {
-    enabled: false,
+    enabled: true,
     label: "好感",
+    minutesPerPoint: 10,
+    activeWindowMinutes: 15,
     happyThreshold: 50,
     closeThreshold: 75,
     lowTone: "保持礼貌但有一点距离感，回复简洁，不要过分亲昵。",
@@ -103,6 +107,7 @@ let config = {
     affection: 10,
     energy: 80,
     mood: "calm",
+    chatDurationMs: 0,
   },
 };
 let selectedVoiceName = "";
@@ -183,6 +188,8 @@ function renderConfig() {
   affectionEnabledEl.checked = affection.enabled !== false;
   affectionLabelEl.value = affection.label || "好感";
   affectionCurrentEl.value = String(profile.affection ?? 10);
+  affectionMinutesPerPointEl.value = String(affection.minutesPerPoint || 10);
+  affectionActiveWindowEl.value = String(affection.activeWindowMinutes || 15);
   affectionHappyThresholdEl.value = String(affection.happyThreshold || 50);
   affectionCloseThresholdEl.value = String(affection.closeThreshold || 75);
   affectionLowToneEl.value = affection.lowTone || "";
@@ -203,21 +210,22 @@ function renderConfig() {
   const llmReady = Boolean(assistant.baseUrl && assistant.model);
   llmStatusEl.textContent = llmReady ? "已配置" : "未配置";
   ttsStatusEl.textContent = tts.enabled ? "已开启" : "关闭";
-  affectionStatusEl.textContent = affection.enabled === false ? "建议关闭" : "测试中";
+  affectionStatusEl.textContent = affection.enabled === false ? "关闭" : "已开启";
+  const chatMinutes = Math.floor(Number(profile.chatDurationMs || 0) / 60000);
   affectionRuleStatusEl.textContent = affection.enabled === false
-    ? "关闭后，大模型不会收到好感度阶段，也不会按好感度调整语气。"
-    : `当前 ${affection.label || "好感"} ${profile.affection ?? 0}/100。阶段语气会写入 system prompt，但模型执行稳定性取决于具体 LLM。`;
+    ? "关闭后只保留当前数值，不会影响角色说话方式。"
+    : `当前 ${affection.label || "好感"} ${profile.affection ?? 0}/100，已累计有效聊天 ${chatMinutes} 分钟。只有持续聊天时间会让数值缓慢增长。`;
   keyStatusEl.textContent = assistant.hasApiKey
-    ? "已有 LLM API key。留空保存会保留原 key。"
-    : "没有 LLM API key；本地模型服务一般可以留空。";
+    ? "已有聊天 API key。留空保存会保留原 key。"
+    : "没有聊天 API key；本地模型服务一般可以留空。";
   ttsKeyStatusEl.textContent = tts.hasApiKey
-    ? "已有 TTS API key。留空保存会保留原 key。"
-    : "没有 TTS API key；本地服务一般可以留空。";
+    ? "已有语音 API key。留空保存会保留原 key。"
+    : "没有语音 API key；本地服务一般可以留空。";
   if (assistant.hasApiKey && assistant.canPersistApiKey === false) {
-    keyStatusEl.textContent = "已有 LLM API key，但当前系统不支持安全持久化，重启后需要重新填写。";
+    keyStatusEl.textContent = "已有聊天 API key，但当前系统不支持安全持久化，重启后需要重新填写。";
   }
   if (tts.hasApiKey && tts.canPersistApiKey === false) {
-    ttsKeyStatusEl.textContent = "已有 TTS API key，但当前系统不支持安全持久化，重启后需要重新填写。";
+    ttsKeyStatusEl.textContent = "已有语音 API key，但当前系统不支持安全持久化，重启后需要重新填写。";
   }
 }
 
@@ -265,6 +273,8 @@ function readConfigForm(includeEmptyKey = false) {
   const affection = {
     enabled: affectionEnabledEl.checked,
     label: affectionLabelEl.value.trim() || "好感",
+    minutesPerPoint: Number(affectionMinutesPerPointEl.value || 10),
+    activeWindowMinutes: Number(affectionActiveWindowEl.value || 15),
     happyThreshold: Number(affectionHappyThresholdEl.value || 50),
     closeThreshold: Number(affectionCloseThresholdEl.value || 75),
     lowTone: affectionLowToneEl.value.trim(),
@@ -310,12 +320,12 @@ function playSystemTtsTest() {
 
 async function testLlm() {
   testLlmButton.disabled = true;
-  llmTestStatusEl.textContent = "正在测试 LLM...";
+  llmTestStatusEl.textContent = "正在测试聊天连接...";
   try {
     const result = await window.desktopPet.testAssistantConnection(readConfigForm(false));
-    llmTestStatusEl.textContent = result.message || (result.ok ? "LLM 连接成功。" : "LLM 连接失败。");
+    llmTestStatusEl.textContent = result.message || (result.ok ? "聊天连接成功。" : "聊天连接失败。");
   } catch {
-    llmTestStatusEl.textContent = "LLM 测试请求失败。";
+    llmTestStatusEl.textContent = "聊天连接测试失败。";
   } finally {
     testLlmButton.disabled = false;
   }
@@ -323,18 +333,18 @@ async function testLlm() {
 
 async function testTts() {
   testTtsButton.disabled = true;
-  ttsTestStatusEl.textContent = "正在测试 TTS...";
+  ttsTestStatusEl.textContent = "正在测试语音...";
   try {
     const formConfig = readConfigForm(false);
     const result = await window.desktopPet.testTtsConnection(formConfig);
-    ttsTestStatusEl.textContent = result.message || (result.ok ? "TTS 连接成功。" : "TTS 连接失败。");
+    ttsTestStatusEl.textContent = result.message || (result.ok ? "语音连接成功。" : "语音连接失败。");
     if (result.audioDataUrl) {
       new Audio(result.audioDataUrl).play().catch(() => {});
     } else if (formConfig.tts.provider === "system" && result.ok && !playSystemTtsTest()) {
       ttsTestStatusEl.textContent = "系统语音不可用。";
     }
   } catch {
-    ttsTestStatusEl.textContent = "TTS 测试请求失败。";
+    ttsTestStatusEl.textContent = "语音连接测试失败。";
   } finally {
     testTtsButton.disabled = false;
   }
@@ -366,7 +376,7 @@ rateEl.addEventListener("input", updateRangeLabels);
 pitchEl.addEventListener("input", updateRangeLabels);
 ttsProviderEl.addEventListener("change", updateProviderVisibility);
 affectionEnabledEl.addEventListener("change", () => {
-  affectionStatusEl.textContent = affectionEnabledEl.checked ? "测试中" : "建议关闭";
+  affectionStatusEl.textContent = affectionEnabledEl.checked ? "已开启" : "关闭";
 });
 
 if ("speechSynthesis" in window) {

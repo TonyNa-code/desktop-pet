@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Companion Settings</title>
+    <title>Desktop Pet Settings</title>
     <link rel="stylesheet" href="./settings.css" />
   </head>
   <body>
@@ -11,7 +11,7 @@
       <header class="settings-header">
         <div>
           <h1>对话设置</h1>
-          <p id="settings-subtitle">配置人物设定、LLM 和语音朗读</p>
+          <p id="settings-subtitle">配置人物设定、聊天模型和语音朗读</p>
         </div>
         <button id="back-to-chat" type="button">返回聊天</button>
       </header>
@@ -45,7 +45,7 @@
 
       <section class="panel">
         <div class="section-title">
-          <h2>LLM</h2>
+          <h2>聊天模型</h2>
           <span id="llm-status">未配置</span>
         </div>
         <label>
@@ -61,7 +61,7 @@
           <input id="api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
         </label>
         <p id="key-status" class="hint"></p>
-        <p class="hint">本地部署模型和云端模型接口二选一即可。无论本地还是云端，都需要填写该接口支持的模型名；填错时可以直接点“测试 LLM”查看错误。</p>
+        <p class="hint">本地模型和云端接口二选一即可。模型名要和服务里显示的一致；不确定时先点“测试聊天连接”。</p>
         <div class="split-row">
           <label>
             <span>温度</span>
@@ -73,14 +73,14 @@
           </label>
         </div>
         <div class="button-row">
-          <button id="test-llm" type="button">测试 LLM</button>
+          <button id="test-llm" type="button">测试聊天连接</button>
           <span id="llm-test-status" class="hint">保存前也可以测试当前填写的配置。</span>
         </div>
       </section>
 
       <section class="panel">
         <div class="section-title">
-          <h2>TTS</h2>
+          <h2>语音朗读</h2>
           <span id="tts-status">关闭</span>
         </div>
         <label>
@@ -89,7 +89,7 @@
             <option value="none">关闭朗读</option>
             <option value="system">系统语音</option>
             <option value="gptsovits">GPT-SoVITS 本地服务</option>
-            <option value="custom">自定义 TTS 接口</option>
+            <option value="custom">自定义语音接口</option>
           </select>
         </label>
         <label id="system-voice-row">
@@ -102,11 +102,11 @@
             <input id="tts-endpoint" type="url" placeholder="http://127.0.0.1:9880/tts" spellcheck="false" />
           </label>
           <label>
-            <span>TTS API key</span>
+            <span>语音 API key</span>
             <input id="tts-api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
           </label>
           <p id="tts-key-status" class="hint"></p>
-          <p class="hint">系统语音不需要模型地址。GPT-SoVITS 本地服务要先在本机启动推理服务，再填它的服务地址。自定义接口适合已经有网络 TTS 或自己封装服务的人。</p>
+          <p class="hint">系统语音不用填服务地址。GPT-SoVITS 要先在本机启动推理服务，再填它的服务地址。自定义语音接口适合已经有网络语音服务或自己封装服务的人。</p>
           <div class="split-row">
             <label>
               <span>请求格式</span>
@@ -154,7 +154,7 @@
           <label id="custom-body-row">
             <span>自定义 JSON 模板</span>
             <textarea id="tts-custom-body" rows="4" spellcheck="false"></textarea>
-            <span class="hint">只在自定义接口时使用，{{text}} 会被替换为要朗读的文字。不知道接口需要什么字段时，先看该 TTS 服务文档。</span>
+            <span class="hint">只在自定义接口时使用，{{text}} 会被替换为要朗读的文字。不知道需要哪些字段时，先看语音服务文档。</span>
           </label>
         </div>
         <div class="split-row">
@@ -169,21 +169,21 @@
         </div>
         <p class="hint">默认关闭。选择系统语音、GPT-SoVITS 本地服务或自定义接口后，保存时会自动开启朗读。</p>
         <div class="button-row">
-          <button id="test-tts" type="button">测试 TTS</button>
+          <button id="test-tts" type="button">测试语音</button>
           <span id="tts-test-status" class="hint">GPT-SoVITS 本地服务需要先在你的电脑上启动。</span>
         </div>
       </section>
 
       <section class="panel">
         <div class="section-title">
-          <h2>关系语气（测试）</h2>
-          <span id="affection-status">建议关闭</span>
+          <h2>好感度</h2>
+          <span id="affection-status">已开启</span>
         </div>
         <label class="check-row">
           <input id="affection-enabled" type="checkbox" />
-          <span>启用关系语气测试</span>
+          <span>启用好感度</span>
         </label>
-        <p class="hint">这是实验功能。开启后只会把当前数值和阶段语气写进 LLM system prompt，不会通过点击、聊天或每日规则自动增长；如果模型不稳定，建议保持关闭。</p>
+        <p class="hint">好感度只会随着有效聊天时长缓慢增长。点击、双击、长按、换表情、打开应用都不会增加，也没有每日增长规则。</p>
         <div class="split-row">
           <label>
             <span>数值名称</span>
@@ -196,6 +196,17 @@
         </div>
         <div class="split-row">
           <label>
+            <span>每几分钟 +1</span>
+            <input id="affection-minutes-per-point" type="number" min="1" max="240" step="1" />
+          </label>
+          <label>
+            <span>连续聊天间隔</span>
+            <input id="affection-active-window" type="number" min="1" max="120" step="1" />
+          </label>
+        </div>
+        <p class="hint">如果两次发送消息的间隔不超过“连续聊天间隔”，中间这段时间会计入有效聊天时长；间隔更久就从新一段聊天开始算。</p>
+        <div class="split-row">
+          <label>
             <span>中阶段阈值</span>
             <input id="affection-happy-threshold" type="number" min="1" max="100" step="1" />
           </label>
@@ -205,15 +216,15 @@
           </label>
         </div>
         <label>
-          <span>低阶段语气</span>
+          <span>低阶段说话方式</span>
           <textarea id="affection-low-tone" rows="3" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>中阶段语气</span>
+          <span>中阶段说话方式</span>
           <textarea id="affection-medium-tone" rows="3" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>高阶段语气</span>
+          <span>高阶段说话方式</span>
           <textarea id="affection-high-tone" rows="3" spellcheck="false"></textarea>
         </label>
         <p id="affection-rule-status" class="hint"></p>

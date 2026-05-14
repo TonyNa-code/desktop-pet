@@ -17,6 +17,7 @@ const MIN_BUBBLE_WIDTH = 320;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+const MINUTE_MS = 60 * 1000;
 const DEFAULT_SETTINGS = {
   characterId: DEFAULT_CHARACTER_ID,
   expressionMode: "automatic",
@@ -56,8 +57,10 @@ const DEFAULT_SETTINGS = {
     extraRules: "",
   },
   affection: {
-    enabled: false,
+    enabled: true,
     label: "好感",
+    minutesPerPoint: 10,
+    activeWindowMinutes: 15,
     happyThreshold: 50,
     closeThreshold: 75,
     lowTone: "保持礼貌但有一点距离感，回复简洁，不要过分亲昵。",
@@ -69,6 +72,9 @@ const DEFAULT_PROFILE = {
   mood: "calm",
   affection: 10,
   energy: 80,
+  chatDurationMs: 0,
+  affectionCarryMs: 0,
+  lastChatAt: 0,
   totalInteractions: 0,
   lastInteractionAt: 0,
   lastLaunchDate: "",
@@ -366,6 +372,18 @@ function normalizeAffectionSettings(rawAffection = {}) {
   return {
     enabled: raw.enabled !== false,
     label: normalizeCompactText(raw.label, 24) || DEFAULT_SETTINGS.affection.label,
+    minutesPerPoint: Math.round(clampNumber(
+      raw.minutesPerPoint,
+      1,
+      240,
+      DEFAULT_SETTINGS.affection.minutesPerPoint,
+    )),
+    activeWindowMinutes: Math.round(clampNumber(
+      raw.activeWindowMinutes,
+      1,
+      120,
+      DEFAULT_SETTINGS.affection.activeWindowMinutes,
+    )),
     happyThreshold: Math.round(clampNumber(raw.happyThreshold, 1, 100, DEFAULT_SETTINGS.affection.happyThreshold)),
     closeThreshold: Math.round(clampNumber(raw.closeThreshold, 1, 100, DEFAULT_SETTINGS.affection.closeThreshold)),
     lowTone: normalizeLongText(raw.lowTone, 800) || DEFAULT_SETTINGS.affection.lowTone,
@@ -422,6 +440,9 @@ function normalizeProfile(nextProfile) {
     mood,
     affection: clamp(Number.isFinite(affection) ? affection : DEFAULT_PROFILE.affection, 0, 100),
     energy: clamp(Number.isFinite(energy) ? energy : DEFAULT_PROFILE.energy, 0, 100),
+    chatDurationMs: Math.max(0, Number(nextProfile.chatDurationMs) || 0),
+    affectionCarryMs: Math.max(0, Number(nextProfile.affectionCarryMs) || 0),
+    lastChatAt: Math.max(0, Number(nextProfile.lastChatAt) || 0),
     totalInteractions: Math.max(0, Number(nextProfile.totalInteractions) || 0),
     lastInteractionAt: Math.max(0, Number(nextProfile.lastInteractionAt) || 0),
     lastLaunchDate: typeof nextProfile.lastLaunchDate === "string" ? nextProfile.lastLaunchDate : "",
@@ -692,6 +713,34 @@ function updateMoodFromInteraction(kind) {
   }
 }
 
+function recordChatTimeProgress(now = Date.now()) {
+  const affection = settings.affection || DEFAULT_SETTINGS.affection;
+  if (!affection.enabled) {
+    profile.lastChatAt = now;
+    return 0;
+  }
+
+  const previousChatAt = profile.lastChatAt || 0;
+  profile.lastChatAt = now;
+  if (!previousChatAt) return 0;
+
+  const elapsed = Math.max(0, now - previousChatAt);
+  const activeWindowMs = affection.activeWindowMinutes * MINUTE_MS;
+  if (!elapsed || elapsed > activeWindowMs) return 0;
+
+  profile.chatDurationMs = Math.max(0, (profile.chatDurationMs || 0) + elapsed);
+  profile.affectionCarryMs = Math.max(0, (profile.affectionCarryMs || 0) + elapsed);
+
+  const pointMs = affection.minutesPerPoint * MINUTE_MS;
+  const gained = Math.floor(profile.affectionCarryMs / pointMs);
+  if (!gained) return 0;
+
+  const before = profile.affection;
+  profile.affection = clamp(profile.affection + gained, 0, 100);
+  profile.affectionCarryMs %= pointMs;
+  return profile.affection - before;
+}
+
 function sendPetMessage(text, action = "waving", options = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.webContents.send("pet-message", { text, action, ...options });
@@ -723,6 +772,7 @@ function publicChatConfig() {
       affection: profile.affection,
       energy: profile.energy,
       mood: profile.mood,
+      chatDurationMs: profile.chatDurationMs,
     },
   };
 }
@@ -936,7 +986,7 @@ async function requestAssistantReply(userText) {
   const assistant = settings.assistant || DEFAULT_SETTINGS.assistant;
   if (!assistant.baseUrl || !assistant.model) {
     return {
-      reply: "还没有配置 LLM。打开聊天窗口里的设置，填入 Base URL 和模型名后就能聊天啦。",
+      reply: "还没有配置聊天模型。打开聊天窗口里的设置，填入 Base URL 和模型名后就能聊天啦。",
       action: "review",
       ok: false,
     };
@@ -964,7 +1014,7 @@ async function requestAssistantReply(userText) {
     if (!response.ok) {
       const detail = await responseErrorText(response);
       return {
-        reply: `LLM 请求失败了，状态码 ${response.status}${detail ? `：${detail}` : ""}。检查一下 Base URL、模型名和 API key。`,
+        reply: `聊天请求失败了，状态码 ${response.status}${detail ? `：${detail}` : ""}。检查一下 Base URL、模型名和 API key。`,
         action: pickAvailableAction(["failed", "review"]),
         ok: false,
       };
@@ -986,7 +1036,7 @@ async function requestAssistantReply(userText) {
       ok: true,
     };
   } catch (error) {
-    const timeoutMessage = error?.name === "AbortError" ? "LLM 请求超时了。" : "LLM 暂时连不上。";
+    const timeoutMessage = error?.name === "AbortError" ? "聊天请求超时了。" : "聊天服务暂时连不上。";
     return {
       reply: `${timeoutMessage} 检查网络、Base URL 或本地模型服务是否启动。`,
       action: pickAvailableAction(["failed", "review"]),
@@ -1025,14 +1075,14 @@ async function testAssistantConnection(_event, patch = {}) {
     });
     if (!response.ok) {
       const detail = await responseErrorText(response);
-      return { ok: false, message: `LLM 请求失败，状态码 ${response.status}${detail ? `：${detail}` : ""}。` };
+      return { ok: false, message: `聊天请求失败，状态码 ${response.status}${detail ? `：${detail}` : ""}。` };
     }
     const data = await response.json();
     const preview = compactAssistantReply(data?.choices?.[0]?.message?.content).slice(0, 80);
-    if (!preview) return { ok: false, message: "LLM 返回了空回复。" };
-    return { ok: true, message: `LLM 连接成功：${preview}` };
+    if (!preview) return { ok: false, message: "聊天服务返回了空回复。" };
+    return { ok: true, message: `聊天连接成功：${preview}` };
   } catch (error) {
-    const message = error?.name === "AbortError" ? "LLM 测试超时。" : "LLM 测试请求失败。";
+    const message = error?.name === "AbortError" ? "聊天连接测试超时。" : "聊天连接测试失败。";
     return { ok: false, message };
   } finally {
     clearTimeout(timeout);
@@ -1043,7 +1093,7 @@ async function testTtsConnection(_event, patch = {}) {
   const candidate = settingsFromChatConfigPatch(patch);
   const tts = candidate.tts || DEFAULT_SETTINGS.tts;
   if (!tts.enabled || tts.provider === "none") {
-    return { ok: false, message: "TTS 当前关闭。请选择一个语音后端。" };
+    return { ok: false, message: "语音朗读当前关闭。请选择一个语音后端。" };
   }
   if (tts.provider === "system") {
     return { ok: true, message: "系统语音可用；保存后桌宠回复会朗读。" };
@@ -1053,11 +1103,11 @@ async function testTtsConnection(_event, patch = {}) {
   }
   const result = await synthesizeSpeechWithSettings("语音连接测试。", candidate);
   if (!result.ok) {
-    return { ok: false, message: `TTS 测试失败：${result.error || "unknown_error"}` };
+    return { ok: false, message: `语音测试失败：${result.error || "unknown_error"}` };
   }
   return {
     ok: true,
-    message: "TTS 连接成功，已生成测试音频。",
+    message: "语音连接成功，已生成测试音频。",
     audioDataUrl: result.audioDataUrl,
   };
 }
@@ -1076,6 +1126,7 @@ async function sendChatMessage(_event, rawText) {
     speak: true,
     bubbleText: bubblePreview(result.reply),
   });
+  if (result.ok) recordChatTimeProgress();
   updateMoodFromInteraction("chat");
   return {
     ok: result.ok,
