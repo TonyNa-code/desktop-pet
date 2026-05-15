@@ -10,6 +10,7 @@ const {
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const i18n = require("./i18n");
 
 const BASE_SIZE = { width: 192, height: 208 };
 const BUBBLE_HEIGHT = 132;
@@ -19,6 +20,7 @@ const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 const MINUTE_MS = 60 * 1000;
 const DEFAULT_SETTINGS = {
+  language: "system",
   characterId: DEFAULT_CHARACTER_ID,
   expressionMode: "automatic",
   scale: 1,
@@ -191,6 +193,8 @@ function publicSettings() {
 
 function appState() {
   return {
+    language: settings.language,
+    resolvedLanguage: activeLanguage(),
     settings: publicSettings(),
     profile,
     characters: listCharacterPacks().map(({ absoluteSpritePath, ...pack }) => pack),
@@ -277,6 +281,7 @@ function encryptStoredApiKey(section) {
 
 function normalizeSettings(nextSettings) {
   nextSettings = nextSettings || {};
+  const language = i18n.normalizeLanguage(nextSettings.language);
   const assistant = normalizeAssistantSettings(nextSettings?.assistant);
   const tts = normalizeTtsSettings(nextSettings?.tts);
   const persona = normalizePersonaSettings(nextSettings?.persona);
@@ -294,6 +299,7 @@ function normalizeSettings(nextSettings) {
     ? Number(nextSettings.restReminderMinutes)
     : 0;
   return {
+    language,
     characterId,
     expressionMode,
     scale,
@@ -304,6 +310,14 @@ function normalizeSettings(nextSettings) {
     persona,
     affection,
   };
+}
+
+function activeLanguage(nextSettings = settings) {
+  return i18n.resolveLanguage(nextSettings.language, app.getLocale());
+}
+
+function t(key, variables = {}, nextSettings = settings) {
+  return i18n.t(key, variables, activeLanguage(nextSettings));
 }
 
 function normalizeAssistantSettings(rawAssistant = {}) {
@@ -518,7 +532,7 @@ function createChatWindow() {
     minHeight: 360,
     x: Math.round(primary.x + primary.width - 420),
     y: Math.round(primary.y + primary.height - 560),
-    title: "Companion Chat",
+    title: t("window.chatTitle"),
     show: false,
     backgroundColor: "#f6f7f9",
     alwaysOnTop: settings.alwaysOnTop,
@@ -552,7 +566,7 @@ function createQuickChatWindow() {
     minHeight: 76,
     x: Math.round(primary.x + primary.width - 452),
     y: Math.round(primary.y + primary.height - 186),
-    title: "Quick Companion Input",
+    title: t("window.quickChatTitle"),
     frame: false,
     resizable: false,
     show: false,
@@ -586,7 +600,7 @@ function createCompanionSettingsWindow() {
     height: 720,
     minWidth: 560,
     minHeight: 620,
-    title: "Companion Settings",
+    title: t("window.settingsTitle"),
     show: false,
     backgroundColor: "#f6f7f9",
     webPreferences: {
@@ -643,15 +657,19 @@ function updateSettings(patch) {
   }
   if (chatWindow && !chatWindow.isDestroyed()) {
     chatWindow.setAlwaysOnTop(settings.alwaysOnTop);
+    chatWindow.setTitle(t("window.chatTitle"));
     chatWindow.webContents.send("chat-state-updated", chatState());
   }
   if (quickChatWindow && !quickChatWindow.isDestroyed()) {
     quickChatWindow.setAlwaysOnTop(settings.alwaysOnTop);
+    quickChatWindow.setTitle(t("window.quickChatTitle"));
     quickChatWindow.webContents.send("chat-state-updated", chatState());
   }
   if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
+    companionSettingsWindow.setTitle(t("window.settingsTitle"));
     companionSettingsWindow.webContents.send("chat-state-updated", chatState());
   }
+  setApplicationMenu();
 }
 
 function clamp(value, min, max) {
@@ -674,13 +692,7 @@ function recordLaunch() {
 }
 
 function moodText() {
-  const labels = {
-    calm: "平静",
-    happy: "开心",
-    tired: "累了",
-    annoyed: "有点烦",
-  };
-  return labels[profile.mood] || labels.calm;
+  return t(`mood.${profile.mood}`) || t("mood.calm");
 }
 
 function updateMoodFromInteraction(kind) {
@@ -756,6 +768,8 @@ function publicChatConfig() {
   const { apiKey, ...assistant } = settings.assistant || DEFAULT_SETTINGS.assistant;
   const { apiKey: ttsApiKey, ...tts } = settings.tts || DEFAULT_SETTINGS.tts;
   return {
+    language: settings.language,
+    resolvedLanguage: activeLanguage(),
     assistant: {
       ...assistant,
       hasApiKey: Boolean(apiKey),
@@ -795,6 +809,7 @@ function applyChatConfigPatch(patch = {}) {
   }
   applyProfileConfigPatch(patch.profile || {});
   const settingsPatch = {
+    ...(patch.language !== undefined ? { language: patch.language } : {}),
     assistant: assistantPatch,
     tts: ttsPatch,
     persona: { ...(patch.persona || {}), setupDone: true },
@@ -828,6 +843,7 @@ function settingsFromChatConfigPatch(patch = {}) {
   }
   return normalizeSettings({
     ...settings,
+    ...(patch.language !== undefined ? { language: patch.language } : {}),
     assistant: {
       ...(settings.assistant || DEFAULT_SETTINGS.assistant),
       ...assistantPatch,
@@ -863,6 +879,8 @@ function addChatMessage(role, content) {
 
 function chatState() {
   return {
+    language: settings.language,
+    resolvedLanguage: activeLanguage(),
     config: publicChatConfig(),
     history: publicChatHistory(),
     character: (() => {
@@ -889,11 +907,11 @@ function llmEndpoint(baseUrl) {
 
 function activeCharacterStyle() {
   const pack = getCharacterPack();
-  if (!pack) return "友好、简洁、适合陪伴工作的桌面伙伴。";
+  if (!pack) return t("prompt.defaultStyle");
   if (pack.id === "luna") {
-    return "礼貌、聪明、稍微傲娇，但不要刻薄；回复自然短句，适合桌宠陪伴。";
+    return t("prompt.lunaStyle");
   }
-  return "友好、轻松、简洁，像一个陪伴工作的桌面伙伴。";
+  return t("prompt.defaultStyle");
 }
 
 function personaInstruction() {
@@ -902,41 +920,47 @@ function personaInstruction() {
   const affection = settings.affection || DEFAULT_SETTINGS.affection;
   const characterName = persona.name || pack?.name || "Desktop Pet";
   const personaLines = [
-    persona.personality ? `性格：${persona.personality}` : "",
-    persona.speakingStyle ? `说话方式：${persona.speakingStyle}` : "",
-    persona.background ? `背景设定：${persona.background}` : "",
-    persona.extraRules ? `额外规则：${persona.extraRules}` : "",
+    persona.personality ? t("prompt.personality", { text: persona.personality }) : "",
+    persona.speakingStyle ? t("prompt.speakingStyle", { text: persona.speakingStyle }) : "",
+    persona.background ? t("prompt.background", { text: persona.background }) : "",
+    persona.extraRules ? t("prompt.extraRules", { text: persona.extraRules }) : "",
   ].filter(Boolean);
   return [
-    `你是 ${characterName}，一个会在桌面上陪人聊天的小角色。`,
-    personaLines.length ? personaLines.join("\n") : `角色风格：${activeCharacterStyle()}`,
+    t("prompt.role", { name: characterName }),
+    personaLines.length ? personaLines.join("\n") : t("prompt.characterStyle", { style: activeCharacterStyle() }),
     affectionInstruction(),
-    "默认用中文回答。回复要自然、简短、有陪伴感。",
-    "不要主动索要隐私信息。除非对方明确要求，不要输出长篇列表、表格或代码块。",
+    t("prompt.defaultLanguage"),
+    t("prompt.privacy"),
   ].join("\n");
 }
 
 function affectionInstruction() {
   const affection = settings.affection || DEFAULT_SETTINGS.affection;
   if (!affection.enabled) {
-    return `当前互动状态：活力 ${profile.energy}/100，心情 ${moodText()}。不要根据好感度改变语气。`;
+    return t("prompt.affectionOff", { energy: profile.energy, mood: moodText() });
   }
 
   const closeThreshold = Math.max(affection.closeThreshold, affection.happyThreshold);
-  let stage = "低";
+  let stage = t("prompt.stage.low");
   let tone = affection.lowTone;
   if (profile.affection >= closeThreshold) {
-    stage = "高";
+    stage = t("prompt.stage.high");
     tone = affection.highTone;
   } else if (profile.affection >= affection.happyThreshold) {
-    stage = "中";
+    stage = t("prompt.stage.medium");
     tone = affection.mediumTone;
   }
 
   return [
-    `当前互动状态：${affection.label} ${profile.affection}/100（${stage}阶段），活力 ${profile.energy}/100，心情 ${moodText()}。`,
-    `语气必须符合当前${affection.label}阶段：${tone}`,
-    `不要主动说出${affection.label}数值；只有对方明确询问状态时才可以概括。`,
+    t("prompt.affectionState", {
+      label: affection.label,
+      value: profile.affection,
+      stage,
+      energy: profile.energy,
+      mood: moodText(),
+    }),
+    t("prompt.affectionTone", { label: affection.label, tone }),
+    t("prompt.affectionPrivacy", { label: affection.label }),
   ].join("\n");
 }
 
@@ -962,16 +986,16 @@ function pickAvailableAction(candidates, fallback = "waving") {
 
 function inferPetAction(userText, replyText) {
   const text = `${userText} ${replyText}`;
-  if (/谢谢|感谢|开心|哈哈|喜欢|太好|可爱|棒|好耶|nice/i.test(text)) {
+  if (/谢谢|感谢|开心|哈哈|喜欢|太好|可爱|棒|好耶|nice|thanks|thank you|happy|cute|great|ありがとう|嬉しい|かわいい|すごい/i.test(text)) {
     return pickAvailableAction(["happy", "waving", "jumping"]);
   }
-  if (/害羞|脸红|不好意思|嘴硬|傲娇|哼|才不是/i.test(text)) {
+  if (/害羞|脸红|不好意思|嘴硬|傲娇|哼|才不是|shy|blush|tsundere|hmph|照れ|恥ずかしい|ツンデレ|ふん/i.test(text)) {
     return pickAvailableAction(["tsundereEmbarrassed", "shy", "happy", "waving"]);
   }
-  if (/生气|烦|不满|讨厌|笨|错了|失败|坏了|报错/i.test(text)) {
+  if (/生气|烦|不满|讨厌|笨|错了|失败|坏了|报错|angry|annoyed|error|failed|broken|bug|怒|失敗|エラー|壊れ/i.test(text)) {
     return pickAvailableAction(["tsundereAnnoyed", "failed", "review"]);
   }
-  if (/想一想|为什么|怎么|如何|问题|代码|修|做|分析|解释|\?|\？/i.test(text)) {
+  if (/想一想|为什么|怎么|如何|问题|代码|修|做|分析|解释|why|how|question|code|fix|analyze|explain|なぜ|どう|質問|コード|修正|説明|\?|\？/i.test(text)) {
     return pickAvailableAction(["review", "tsundereProud", "waving"]);
   }
   return pickAvailableAction(["tsundereProud", "waving", "idle"]);
@@ -986,7 +1010,7 @@ async function requestAssistantReply(userText) {
   const assistant = settings.assistant || DEFAULT_SETTINGS.assistant;
   if (!assistant.baseUrl || !assistant.model) {
     return {
-      reply: "还没有配置聊天模型。打开聊天窗口里的设置，填入 Base URL 和模型名后就能聊天啦。",
+      reply: t("assistant.noConfig"),
       action: "review",
       ok: false,
     };
@@ -1014,7 +1038,10 @@ async function requestAssistantReply(userText) {
     if (!response.ok) {
       const detail = await responseErrorText(response);
       return {
-        reply: `聊天请求失败了，状态码 ${response.status}${detail ? `：${detail}` : ""}。检查一下 Base URL、模型名和 API key。`,
+        reply: t("assistant.statusError", {
+          status: response.status,
+          detail: detail ? `: ${detail}` : "",
+        }),
         action: pickAvailableAction(["failed", "review"]),
         ok: false,
       };
@@ -1024,7 +1051,7 @@ async function requestAssistantReply(userText) {
     const reply = compactAssistantReply(data?.choices?.[0]?.message?.content);
     if (!reply) {
       return {
-        reply: "服务返回了空回复，换个模型或稍后再试一下。",
+        reply: t("assistant.empty"),
         action: pickAvailableAction(["failed", "review"]),
         ok: false,
       };
@@ -1036,9 +1063,9 @@ async function requestAssistantReply(userText) {
       ok: true,
     };
   } catch (error) {
-    const timeoutMessage = error?.name === "AbortError" ? "聊天请求超时了。" : "聊天服务暂时连不上。";
+    const timeoutMessage = error?.name === "AbortError" ? t("assistant.timeout") : t("assistant.unreachable");
     return {
-      reply: `${timeoutMessage} 检查网络、Base URL 或本地模型服务是否启动。`,
+      reply: t("assistant.checkService", { message: timeoutMessage }),
       action: pickAvailableAction(["failed", "review"]),
       ok: false,
     };
@@ -1051,7 +1078,7 @@ async function testAssistantConnection(_event, patch = {}) {
   const candidate = settingsFromChatConfigPatch(patch);
   const assistant = candidate.assistant || DEFAULT_SETTINGS.assistant;
   if (!assistant.baseUrl || !assistant.model) {
-    return { ok: false, message: "请先填写 Base URL 和模型名。" };
+    return { ok: false, message: t("assistant.test.missing", {}, candidate) };
   }
 
   const controller = new AbortController();
@@ -1066,8 +1093,8 @@ async function testAssistantConnection(_event, patch = {}) {
       body: JSON.stringify({
         model: assistant.model,
         messages: [
-          { role: "system", content: "你是连接测试助手。请只用一句短中文回复。" },
-          { role: "user", content: "请回复：连接成功" },
+          { role: "system", content: t("assistant.test.system", {}, candidate) },
+          { role: "user", content: t("assistant.test.user", {}, candidate) },
         ],
         temperature: 0,
         stream: false,
@@ -1075,14 +1102,22 @@ async function testAssistantConnection(_event, patch = {}) {
     });
     if (!response.ok) {
       const detail = await responseErrorText(response);
-      return { ok: false, message: `聊天请求失败，状态码 ${response.status}${detail ? `：${detail}` : ""}。` };
+      return {
+        ok: false,
+        message: t("assistant.test.statusError", {
+          status: response.status,
+          detail: detail ? `: ${detail}` : "",
+        }, candidate),
+      };
     }
     const data = await response.json();
     const preview = compactAssistantReply(data?.choices?.[0]?.message?.content).slice(0, 80);
-    if (!preview) return { ok: false, message: "聊天服务返回了空回复。" };
-    return { ok: true, message: `聊天连接成功：${preview}` };
+    if (!preview) return { ok: false, message: t("assistant.test.empty", {}, candidate) };
+    return { ok: true, message: t("assistant.test.success", { preview }, candidate) };
   } catch (error) {
-    const message = error?.name === "AbortError" ? "聊天连接测试超时。" : "聊天连接测试失败。";
+    const message = error?.name === "AbortError"
+      ? t("assistant.test.timeout", {}, candidate)
+      : t("assistant.test.failed", {}, candidate);
     return { ok: false, message };
   } finally {
     clearTimeout(timeout);
@@ -1093,21 +1128,21 @@ async function testTtsConnection(_event, patch = {}) {
   const candidate = settingsFromChatConfigPatch(patch);
   const tts = candidate.tts || DEFAULT_SETTINGS.tts;
   if (!tts.enabled || tts.provider === "none") {
-    return { ok: false, message: "语音朗读当前关闭。请选择一个语音后端。" };
+    return { ok: false, message: t("tts.test.off", {}, candidate) };
   }
   if (tts.provider === "system") {
-    return { ok: true, message: "系统语音可用；保存后桌宠回复会朗读。" };
+    return { ok: true, message: t("tts.test.systemReady", {}, candidate) };
   }
   if (tts.provider === "gptsovits" && !tts.referenceAudioPath) {
-    return { ok: false, message: "请先填写参考音频路径；官方 GPT-SoVITS /tts 通常需要 ref_audio_path。" };
+    return { ok: false, message: t("tts.test.needReference", {}, candidate) };
   }
-  const result = await synthesizeSpeechWithSettings("语音连接测试。", candidate);
+  const result = await synthesizeSpeechWithSettings(t("settings.tts.testText", {}, candidate), candidate);
   if (!result.ok) {
-    return { ok: false, message: `语音测试失败：${result.error || "unknown_error"}` };
+    return { ok: false, message: t("tts.test.failed", { error: result.error || "unknown_error" }, candidate) };
   }
   return {
     ok: true,
-    message: "语音连接成功，已生成测试音频。",
+    message: t("tts.test.success", {}, candidate),
     audioDataUrl: result.audioDataUrl,
   };
 }
@@ -1118,7 +1153,7 @@ async function sendChatMessage(_event, rawText) {
     return { ok: false, error: "empty_message", history: publicChatHistory() };
   }
 
-  sendPetMessage("我想一下。", pickAvailableAction(["review", "tsundereProud", "waving"]), { speak: false });
+  sendPetMessage(t("pet.thinking"), pickAvailableAction(["review", "tsundereProud", "waving"]), { speak: false });
   const result = await requestAssistantReply(text);
   addChatMessage("user", text);
   const assistantMessage = addChatMessage("assistant", result.reply);
@@ -1287,18 +1322,19 @@ async function synthesizeSpeech(_event, rawText) {
 }
 
 function showCurrentTime() {
-  const time = new Intl.DateTimeFormat("zh-CN", {
+  const language = activeLanguage();
+  const time = new Intl.DateTimeFormat(language, {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date());
-  notify("Desktop Pet", `现在是 ${time}`, "waving");
+  notify(t("app.name"), t("notify.time", { time }), "waving");
 }
 
 function startFocusTimer() {
   clearTimeout(focusTimer);
-  notify("专注开始", "25 分钟后提醒你休息。", "review");
+  notify(t("notify.focusStartTitle"), t("notify.focusStartBody"), "review");
   focusTimer = setTimeout(() => {
-    notify("专注结束", "可以休息一下了。", "waving");
+    notify(t("notify.focusEndTitle"), t("notify.focusEndBody"), "waving");
   }, 25 * 60 * 1000);
 }
 
@@ -1307,11 +1343,12 @@ function scheduleRestReminder() {
   restReminderTimer = null;
   if (!settings.restReminderMinutes) return;
   restReminderTimer = setInterval(() => {
-    notify("休息提醒", "起来走动一下，放松眼睛。", "waving");
+    notify(t("notify.restTitle"), t("notify.restBody"), "waving");
   }, settings.restReminderMinutes * 60 * 1000);
 }
 
 function showContextMenu() {
+  const language = activeLanguage();
   const characterItems = listCharacterPacks().map((character) => ({
     label: character.name,
     type: "radio",
@@ -1327,32 +1364,40 @@ function showContextMenu() {
   }));
 
   const restReminderItems = [
-    { label: "关闭", value: 0 },
-    { label: "每 30 分钟", value: 30 },
-    { label: "每 60 分钟", value: 60 },
+    { label: t("menu.off"), value: 0 },
+    { label: t("menu.every30Minutes"), value: 30 },
+    { label: t("menu.every60Minutes"), value: 60 },
   ].map((item) => ({
     label: item.label,
     type: "radio",
     checked: settings.restReminderMinutes === item.value,
     click: () => updateSettings({ restReminderMinutes: item.value }),
   }));
+
+  const languageItems = i18n.LANGUAGE_OPTIONS.map((option) => ({
+    label: i18n.languageLabel(option.value, language),
+    type: "radio",
+    checked: settings.language === option.value,
+    click: () => updateSettings({ language: option.value }),
+  }));
+
   const menu = Menu.buildFromTemplate([
     {
-      label: "角色",
+      label: t("menu.character"),
       enabled: characterItems.length > 0,
       submenu: characterItems,
     },
     {
-      label: "表情模式",
+      label: t("menu.expressionMode"),
       submenu: [
         {
-          label: "自动表情",
+          label: t("menu.automaticExpression"),
           type: "radio",
           checked: settings.expressionMode === "automatic",
           click: () => updateSettings({ expressionMode: "automatic" }),
         },
         {
-          label: "点击表情",
+          label: t("menu.clickExpression"),
           type: "radio",
           checked: settings.expressionMode === "clickOnly",
           click: () => updateSettings({ expressionMode: "clickOnly" }),
@@ -1360,37 +1405,41 @@ function showContextMenu() {
       ],
     },
     {
-      label: "大小",
+      label: t("menu.size"),
       submenu: scaleItems,
     },
     {
-      label: "总在最前",
+      label: t("menu.alwaysOnTop"),
       type: "checkbox",
       checked: settings.alwaysOnTop,
       click: (item) => updateSettings({ alwaysOnTop: item.checked }),
     },
     {
-      label: "实用",
+      label: t("menu.utility"),
       submenu: [
-        { label: "显示当前时间", click: showCurrentTime },
-        { label: "开始 25 分钟专注", click: startFocusTimer },
+        { label: t("menu.showCurrentTime"), click: showCurrentTime },
+        { label: t("menu.startFocus"), click: startFocusTimer },
         {
-          label: "休息提醒",
+          label: t("menu.restReminder"),
           submenu: restReminderItems,
         },
       ],
     },
     {
-      label: "对话",
+      label: t("menu.chat"),
       submenu: [
-        { label: "快速输入", click: createQuickChatWindow },
-        { label: "完整聊天", click: createChatWindow },
-        { label: "对话设置", click: createCompanionSettingsWindow },
+        { label: t("menu.quickInput"), click: createQuickChatWindow },
+        { label: t("menu.fullChat"), click: createChatWindow },
+        { label: t("menu.chatSettings"), click: createCompanionSettingsWindow },
       ],
     },
+    {
+      label: t("menu.language"),
+      submenu: languageItems,
+    },
     { type: "separator" },
-    { label: "回到屏幕右下角", click: resetPosition },
-    { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },
+    { label: t("menu.resetPosition"), click: resetPosition },
+    { label: t("menu.quit"), accelerator: "CommandOrControl+Q", click: () => app.quit() },
   ]);
 
   menu.popup({ window: mainWindow });
@@ -1438,8 +1487,23 @@ function iconImage() {
   return nativeImage.createFromPath(sprite).resize({ width: 32, height: 32 });
 }
 
+function setApplicationMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: t("app.name"),
+      submenu: [
+        { label: t("menu.quickInput"), accelerator: "CommandOrControl+Shift+Space", click: createQuickChatWindow },
+        { label: t("menu.fullChat"), accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
+        { label: t("menu.chatSettings"), click: createCompanionSettingsWindow },
+        { type: "separator" },
+        { label: t("menu.quit"), accelerator: "CommandOrControl+Q", click: () => app.quit() },
+      ],
+    },
+  ]));
+}
+
 app.whenReady().then(() => {
-  app.setName("Desktop Pet");
+  app.setName(t("app.name"));
   createWindow();
 
   ipcMain.handle("get-app-state", () => appState());
@@ -1464,18 +1528,7 @@ app.whenReady().then(() => {
     app.dock.hide();
   }
 
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {
-      label: "Desktop Pet",
-      submenu: [
-        { label: "快速输入", accelerator: "CommandOrControl+Shift+Space", click: createQuickChatWindow },
-        { label: "完整聊天", accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
-        { label: "对话设置", click: createCompanionSettingsWindow },
-        { type: "separator" },
-        { label: "退出", accelerator: "CommandOrControl+Q", click: () => app.quit() },
-      ],
-    },
-  ]));
+  setApplicationMenu();
 
   try {
     mainWindow.setIcon?.(iconImage());

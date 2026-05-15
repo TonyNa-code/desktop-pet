@@ -18,34 +18,45 @@
 
       <section class="panel">
         <div class="section-title">
-          <h2>人物设定</h2>
+          <h2 data-i18n="settings.general.title">通用</h2>
+        </div>
+        <label>
+          <span data-i18n="language.current">界面语言</span>
+          <select id="language"></select>
+        </label>
+        <p class="hint" data-i18n="language.hint">会影响菜单、窗口、提示气泡和默认对话语言。</p>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2 data-i18n="settings.persona.title">人物设定</h2>
           <span id="persona-status">未填写</span>
         </div>
         <label>
-          <span>角色称呼</span>
+          <span data-i18n="settings.persona.name">角色称呼</span>
           <input id="persona-name" type="text" placeholder="例如 桌宠、露娜、小助手" spellcheck="false" />
         </label>
         <label>
-          <span>性格</span>
+          <span data-i18n="settings.persona.personality">性格</span>
           <textarea id="persona-personality" rows="3" placeholder="例如 礼貌、聪明、稍微傲娇，但内心关心使用者。" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>说话方式</span>
+          <span data-i18n="settings.persona.speakingStyle">说话方式</span>
           <textarea id="persona-speaking-style" rows="3" placeholder="例如 回复简短自然，偶尔吐槽，但不要刻薄。" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>背景设定</span>
+          <span data-i18n="settings.persona.background">背景设定</span>
           <textarea id="persona-background" rows="3" placeholder="角色背景、和使用者的关系、陪伴场景，可以留空。" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>额外规则</span>
+          <span data-i18n="settings.persona.extraRules">额外规则</span>
           <textarea id="persona-extra-rules" rows="3" placeholder="例如 不要主动报好感数值；不要输出长篇列表。" spellcheck="false"></textarea>
         </label>
       </section>
 
       <section class="panel">
         <div class="section-title">
-          <h2>聊天模型</h2>
+          <h2 data-i18n="settings.llm.title">聊天模型</h2>
           <span id="llm-status">未配置</span>
         </div>
         <label>
@@ -53,7 +64,7 @@
           <input id="base-url" type="url" placeholder="http://localhost:11434/v1" spellcheck="false" />
         </label>
         <label>
-          <span>模型名</span>
+          <span data-i18n="settings.llm.model">模型名</span>
           <input id="model" type="text" placeholder="例如 llama3.1、deepseek-chat、gpt-4.1-mini" spellcheck="false" />
         </label>
         <label>
@@ -61,14 +72,14 @@
           <input id="api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
         </label>
         <p id="key-status" class="hint"></p>
-        <p class="hint">本地模型和云端接口二选一即可。模型名要和服务里显示的一致；不确定时先点“测试聊天连接”。</p>
+        <p class="hint" data-i18n="settings.llm.hint">本地模型和云端接口二选一即可。模型名要和服务里显示的一致；不确定时先点“测试聊天连接”。</p>
         <div class="split-row">
           <label>
-            <span>温度</span>
+            <span data-i18n="settings.llm.temperature">温度</span>
             <input id="temperature" type="number" min="0" max="2" step="0.1" />
           </label>
           <label>
-            <span>记忆轮数</span>
+            <span data-i18n="settings.llm.maxHistory">记忆轮数</span>
             <input id="max-history" type="number" min="2" max="30" step="1" />
           </label>
         </div>
@@ -80,11 +91,11 @@
 
       <section class="panel">
         <div class="section-title">
-          <h2>语音朗读</h2>
+          <h2 data-i18n="settings.tts.title">语音朗读</h2>
           <span id="tts-status">关闭</span>
         </div>
         <label>
-          <span>语音后端</span>
+          <span data-i18n="settings.tts.provider">语音后端</span>
           <select id="tts-provider">
             <option value="none">关闭朗读</option>
             <option value="system">系统语音</option>
@@ -93,30 +104,30 @@
           </select>
         </label>
         <label id="system-voice-row">
-          <span>系统语音</span>
+          <span data-i18n="settings.tts.systemVoice">系统语音</span>
           <select id="voice-name"></select>
         </label>
         <div id="external-tts-fields" class="sub-panel">
           <label>
-            <span>服务地址</span>
+            <span data-i18n="settings.tts.endpoint">服务地址</span>
             <input id="tts-endpoint" type="url" placeholder="http://127.0.0.1:9880/tts" spellcheck="false" />
           </label>
           <label>
-            <span>语音 API key</span>
+            <span data-i18n="settings.tts.apiKey">语音 API key</span>
             <input id="tts-api-key" type="password" placeholder="留空保存会保留已保存的 key" spellcheck="false" />
           </label>
           <p id="tts-key-status" class="hint"></p>
-          <p class="hint">系统语音不用填服务地址。GPT-SoVITS 要先在本机启动推理服务，再填它的服务地址。自定义语音接口适合已经有网络语音服务或自己封装服务的人。</p>
+          <p class="hint" data-i18n="settings.tts.externalHint">系统语音不用填服务地址。GPT-SoVITS 要先在本机启动推理服务，再填它的服务地址。自定义语音接口适合已经有网络语音服务或自己封装服务的人。</p>
           <div class="split-row">
             <label>
-              <span>请求格式</span>
+              <span data-i18n="settings.tts.requestMode">请求格式</span>
               <select id="tts-request-mode">
                 <option value="json">JSON POST</option>
                 <option value="query">Query GET</option>
               </select>
             </label>
             <label>
-              <span>音频格式</span>
+              <span data-i18n="settings.tts.mediaType">音频格式</span>
               <select id="tts-media-type">
                 <option value="wav">wav</option>
                 <option value="ogg">ogg</option>
@@ -129,45 +140,45 @@
           <div id="gptsovits-fields" class="sub-grid">
             <div class="split-row">
               <label>
-                <span>文本语言</span>
+                <span data-i18n="settings.tts.textLanguage">文本语言</span>
                 <input id="tts-text-language" type="text" placeholder="zh" spellcheck="false" />
               </label>
               <label>
-                <span>参考文本语言</span>
+                <span data-i18n="settings.tts.promptLanguage">参考文本语言</span>
                 <input id="tts-prompt-language" type="text" placeholder="zh" spellcheck="false" />
               </label>
             </div>
             <label>
-              <span>参考音频路径</span>
+              <span data-i18n="settings.tts.referenceAudio">参考音频路径</span>
               <input id="tts-reference-audio" type="text" placeholder="GPT-SoVITS 服务能访问到的参考音频路径" spellcheck="false" />
             </label>
             <label>
-              <span>参考文本</span>
+              <span data-i18n="settings.tts.promptText">参考文本</span>
               <input id="tts-prompt-text" type="text" placeholder="参考音频对应文本，可留空" />
             </label>
             <label>
-              <span>切分方式</span>
+              <span data-i18n="settings.tts.splitMethod">切分方式</span>
               <input id="tts-text-split-method" type="text" placeholder="cut5" spellcheck="false" />
             </label>
-            <p class="hint">参考音频路径是 GPT-SoVITS 服务能访问到的音频路径。文本语言是要朗读内容的语言，参考文本语言是参考音频对应文字的语言，中文常用 zh。切分方式一般保持 cut5。</p>
+            <p class="hint" data-i18n="settings.tts.gptSovitsHint">参考音频路径是 GPT-SoVITS 服务能访问到的音频路径。文本语言是要朗读内容的语言，参考文本语言是参考音频对应文字的语言，中文常用 zh。切分方式一般保持 cut5。</p>
           </div>
           <label id="custom-body-row">
-            <span>自定义 JSON 模板</span>
+            <span data-i18n="settings.tts.customBody">自定义 JSON 模板</span>
             <textarea id="tts-custom-body" rows="4" spellcheck="false"></textarea>
-            <span class="hint">只在自定义接口时使用，{{text}} 会被替换为要朗读的文字。不知道需要哪些字段时，先看语音服务文档。</span>
+            <span class="hint" data-i18n="settings.tts.customBodyHint">只在自定义接口时使用，{{text}} 会被替换为要朗读的文字。不知道需要哪些字段时，先看语音服务文档。</span>
           </label>
         </div>
         <div class="split-row">
           <label>
-            <span>语速 <b id="rate-value">1.0</b></span>
+            <span><span id="rate-label">语速</span> <b id="rate-value">1.0</b></span>
             <input id="tts-rate" type="range" min="0.5" max="1.8" step="0.1" />
           </label>
           <label>
-            <span>音调 <b id="pitch-value">1.0</b></span>
+            <span><span id="pitch-label">音调</span> <b id="pitch-value">1.0</b></span>
             <input id="tts-pitch" type="range" min="0.5" max="1.8" step="0.1" />
           </label>
         </div>
-        <p class="hint">默认关闭。选择系统语音、GPT-SoVITS 本地服务或自定义接口后，保存时会自动开启朗读。</p>
+        <p class="hint" data-i18n="settings.tts.defaultHint">默认关闭。选择系统语音、GPT-SoVITS 本地服务或自定义接口后，保存时会自动开启朗读。</p>
         <div class="button-row">
           <button id="test-tts" type="button">测试语音</button>
           <span id="tts-test-status" class="hint">GPT-SoVITS 本地服务需要先在你的电脑上启动。</span>
@@ -176,55 +187,55 @@
 
       <section class="panel">
         <div class="section-title">
-          <h2>好感度</h2>
+          <h2 data-i18n="settings.affection.title">好感度</h2>
           <span id="affection-status">关闭</span>
         </div>
         <label class="check-row">
           <input id="affection-enabled" type="checkbox" />
-          <span>启用好感度</span>
+          <span data-i18n="settings.affection.enable">启用好感度</span>
         </label>
-        <p class="hint">默认关闭。开启后，好感度只会随着有效聊天时长缓慢增长。点击、双击、长按、换表情、打开应用都不会增加，也没有每日增长规则。</p>
+        <p class="hint" data-i18n="settings.affection.hint">默认关闭。开启后，好感度只会随着有效聊天时长缓慢增长。点击、双击、长按、换表情、打开应用都不会增加，也没有每日增长规则。</p>
         <div class="split-row">
           <label>
-            <span>数值名称</span>
+            <span data-i18n="settings.affection.label">数值名称</span>
             <input id="affection-label" type="text" placeholder="好感" spellcheck="false" />
           </label>
           <label>
-            <span>当前数值</span>
+            <span data-i18n="settings.affection.current">当前数值</span>
             <input id="affection-current" type="number" min="0" max="100" step="1" />
           </label>
         </div>
         <div class="split-row">
           <label>
-            <span>每几分钟 +1</span>
+            <span data-i18n="settings.affection.minutesPerPoint">每几分钟 +1</span>
             <input id="affection-minutes-per-point" type="number" min="1" max="240" step="1" />
           </label>
           <label>
-            <span>连续聊天间隔</span>
+            <span data-i18n="settings.affection.activeWindow">连续聊天间隔</span>
             <input id="affection-active-window" type="number" min="1" max="120" step="1" />
           </label>
         </div>
-        <p class="hint">如果两次发送消息的间隔不超过“连续聊天间隔”，中间这段时间会计入有效聊天时长；间隔更久就从新一段聊天开始算。</p>
+        <p class="hint" data-i18n="settings.affection.ruleHint">如果两次发送消息的间隔不超过“连续聊天间隔”，中间这段时间会计入有效聊天时长；间隔更久就从新一段聊天开始算。</p>
         <div class="split-row">
           <label>
-            <span>中阶段阈值</span>
+            <span data-i18n="settings.affection.mediumThreshold">中阶段阈值</span>
             <input id="affection-happy-threshold" type="number" min="1" max="100" step="1" />
           </label>
           <label>
-            <span>高阶段阈值</span>
+            <span data-i18n="settings.affection.highThreshold">高阶段阈值</span>
             <input id="affection-close-threshold" type="number" min="1" max="100" step="1" />
           </label>
         </div>
         <label>
-          <span>低阶段说话方式</span>
+          <span data-i18n="settings.affection.lowTone">低阶段说话方式</span>
           <textarea id="affection-low-tone" rows="3" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>中阶段说话方式</span>
+          <span data-i18n="settings.affection.mediumTone">中阶段说话方式</span>
           <textarea id="affection-medium-tone" rows="3" spellcheck="false"></textarea>
         </label>
         <label>
-          <span>高阶段说话方式</span>
+          <span data-i18n="settings.affection.highTone">高阶段说话方式</span>
           <textarea id="affection-high-tone" rows="3" spellcheck="false"></textarea>
         </label>
         <p id="affection-rule-status" class="hint"></p>
@@ -238,6 +249,7 @@
         </div>
       </footer>
     </main>
+    <script src="./i18n.js"></script>
     <script src="./settings.js"></script>
   </body>
 </html>

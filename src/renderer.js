@@ -1,6 +1,7 @@
 const canvas = document.querySelector("#pet");
 const speechBubble = document.querySelector("#speech-bubble");
 const ctx = canvas.getContext("2d", { alpha: true });
+const i18n = window.DesktopPetI18n;
 const SINGLE_CLICK_DELAY = 280;
 const CLICK_ONLY_COOLDOWN = 220;
 
@@ -36,6 +37,8 @@ const FALLBACK_CHARACTER = {
 };
 
 let settings = {
+  language: "system",
+  resolvedLanguage: "zh-CN",
   expressionMode: "automatic",
   scale: 1,
   alwaysOnTop: true,
@@ -58,6 +61,11 @@ let ignoreSingleClicksUntil = 0;
 let hoverReadyAt = 0;
 let bubbleTimer;
 let didShowStartupGreeting = false;
+let activeLanguage = "zh-CN";
+
+function text(key, variables = {}) {
+  return i18n.t(key, variables, activeLanguage);
+}
 
 function draw() {
   if (!spriteImage) return;
@@ -184,6 +192,8 @@ function applyAppState(nextAppState = {}) {
   const modeChanged = nextAppState.settings?.expressionMode !== settings.expressionMode;
   character = nextCharacter;
   settings = {
+    language: nextAppState.settings?.language || nextAppState.language || "system",
+    resolvedLanguage: nextAppState.resolvedLanguage || nextAppState.settings?.resolvedLanguage || "zh-CN",
     characterId: nextAppState.settings?.characterId || character.id,
     expressionMode: nextAppState.settings?.expressionMode === "clickOnly" ? "clickOnly" : "automatic",
     scale: Number(nextAppState.settings?.scale) || 1,
@@ -200,6 +210,8 @@ function applyAppState(nextAppState = {}) {
       pitch: Number(nextAppState.settings?.tts?.pitch) || 1,
     },
   };
+  activeLanguage = settings.resolvedLanguage;
+  document.documentElement.lang = activeLanguage;
   applyPetLayout();
 
   if (characterChanged || !spriteImage) {
@@ -346,7 +358,9 @@ function chooseTtsVoice() {
     const exact = voices.find((voice) => voice.name === settings.tts.voiceName);
     if (exact) return exact;
   }
-  return voices.find((voice) => /^zh/i.test(voice.lang))
+  const languagePrefix = activeLanguage.split("-")[0];
+  return voices.find((voice) => voice.lang && voice.lang.toLowerCase().startsWith(languagePrefix))
+    || voices.find((voice) => /^zh/i.test(voice.lang))
     || voices.find((voice) => /^ja|^en/i.test(voice.lang))
     || voices[0];
 }
@@ -385,11 +399,11 @@ function handlePetMessage(message = {}) {
 
 function startupGreetingText() {
   const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return "早上好呀";
-  if (hour >= 11 && hour < 14) return "中午好呀";
-  if (hour >= 14 && hour < 18) return "下午好呀";
-  if (hour >= 18 && hour < 23) return "晚上好呀";
-  return "夜深啦，早点休息。";
+  if (hour >= 5 && hour < 11) return text("pet.greeting.morning");
+  if (hour >= 11 && hour < 14) return text("pet.greeting.noon");
+  if (hour >= 14 && hour < 18) return text("pet.greeting.afternoon");
+  if (hour >= 18 && hour < 23) return text("pet.greeting.evening");
+  return text("pet.greeting.night");
 }
 
 function scheduleStartupGreeting() {

@@ -1,4 +1,5 @@
 const subtitleEl = document.querySelector("#settings-subtitle");
+const languageEl = document.querySelector("#language");
 const personaStatusEl = document.querySelector("#persona-status");
 const llmStatusEl = document.querySelector("#llm-status");
 const ttsStatusEl = document.querySelector("#tts-status");
@@ -48,6 +49,8 @@ const affectionHighToneEl = document.querySelector("#affection-high-tone");
 const affectionRuleStatusEl = document.querySelector("#affection-rule-status");
 const rateEl = document.querySelector("#tts-rate");
 const pitchEl = document.querySelector("#tts-pitch");
+const rateLabelEl = document.querySelector("#rate-label");
+const pitchLabelEl = document.querySelector("#pitch-label");
 const rateValueEl = document.querySelector("#rate-value");
 const pitchValueEl = document.querySelector("#pitch-value");
 const saveStatusEl = document.querySelector("#save-status");
@@ -56,8 +59,17 @@ const clearKeyButton = document.querySelector("#clear-key");
 const backToChatButton = document.querySelector("#back-to-chat");
 
 const DEFAULT_CUSTOM_BODY = "{\"text\":\"{{text}}\"}";
+const ZH_AFFECTION_DEFAULTS = {
+  label: "好感",
+  lowTone: "保持礼貌但有一点距离感，回复简洁，不要过分亲昵。",
+  mediumTone: "自然友好，带一点熟悉感，可以适度关心对方。",
+  highTone: "更亲近、更信任，语气可以更温柔主动，但不要失去角色边界。",
+};
+const i18n = window.DesktopPetI18n;
 
 let config = {
+  language: "system",
+  resolvedLanguage: "zh-CN",
   assistant: {
     baseUrl: "",
     model: "",
@@ -111,6 +123,62 @@ let config = {
   },
 };
 let selectedVoiceName = "";
+let activeLanguage = "zh-CN";
+
+function text(key, variables = {}) {
+  return i18n.t(key, variables, activeLanguage);
+}
+
+function refreshLanguageOptions(selectedValue = "system") {
+  languageEl.textContent = "";
+  for (const option of i18n.LANGUAGE_OPTIONS) {
+    const item = document.createElement("option");
+    item.value = option.value;
+    item.textContent = i18n.languageLabel(option.value, activeLanguage);
+    languageEl.append(item);
+  }
+  languageEl.value = selectedValue;
+  if (languageEl.value !== selectedValue) languageEl.value = "system";
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = activeLanguage;
+  document.title = text("window.settingsTitle");
+  document.querySelector("h1").textContent = text("settings.title");
+  subtitleEl.textContent = text("settings.subtitle");
+  backToChatButton.textContent = text("settings.backToChat");
+  for (const element of document.querySelectorAll("[data-i18n]")) {
+    element.textContent = text(element.dataset.i18n);
+  }
+  personaNameEl.placeholder = text("settings.persona.namePlaceholder");
+  personaPersonalityEl.placeholder = text("settings.persona.personalityPlaceholder");
+  personaSpeakingStyleEl.placeholder = text("settings.persona.speakingStylePlaceholder");
+  personaBackgroundEl.placeholder = text("settings.persona.backgroundPlaceholder");
+  personaExtraRulesEl.placeholder = text("settings.persona.extraRulesPlaceholder");
+  modelEl.placeholder = text("settings.llm.modelPlaceholder");
+  apiKeyEl.placeholder = text("settings.llm.apiKeyPlaceholder");
+  ttsApiKeyEl.placeholder = text("settings.llm.apiKeyPlaceholder");
+  ttsProviderEl.querySelector("option[value='none']").textContent = text("settings.tts.providerNone");
+  ttsProviderEl.querySelector("option[value='system']").textContent = text("settings.tts.providerSystem");
+  ttsProviderEl.querySelector("option[value='gptsovits']").textContent = text("settings.tts.providerGptSovits");
+  ttsProviderEl.querySelector("option[value='custom']").textContent = text("settings.tts.providerCustom");
+  ttsReferenceAudioEl.placeholder = text("settings.tts.referenceAudioPlaceholder");
+  ttsPromptTextEl.placeholder = text("settings.tts.promptTextPlaceholder");
+  affectionLabelEl.placeholder = text("settings.affection.defaultLabel");
+  testLlmButton.textContent = text("settings.llm.test");
+  llmTestStatusEl.textContent = text("settings.llm.testHint");
+  testTtsButton.textContent = text("settings.tts.test");
+  ttsTestStatusEl.textContent = text("settings.tts.testHint");
+  clearKeyButton.textContent = text("settings.clearKey");
+  saveSettingsButton.textContent = text("settings.save");
+  saveStatusEl.textContent = text("settings.saveLocal");
+  updateRangeLabels();
+}
+
+function localizedDefaultValue(value, zhDefault, translationKey) {
+  if (!value || value === zhDefault) return text(translationKey);
+  return value;
+}
 
 function getVoices() {
   if (!("speechSynthesis" in window)) return [];
@@ -118,6 +186,8 @@ function getVoices() {
 }
 
 function updateRangeLabels() {
+  rateLabelEl.textContent = text("settings.tts.rate");
+  pitchLabelEl.textContent = text("settings.tts.pitch");
   rateValueEl.textContent = Number(rateEl.value || 1).toFixed(1);
   pitchValueEl.textContent = Number(pitchEl.value || 1).toFixed(1);
 }
@@ -127,7 +197,7 @@ function updateVoiceOptions(selectedName = selectedVoiceName) {
   voiceNameEl.textContent = "";
   const systemOption = document.createElement("option");
   systemOption.value = "";
-  systemOption.textContent = "系统默认语音";
+  systemOption.textContent = text("settings.tts.systemDefaultVoice");
   voiceNameEl.append(systemOption);
   for (const voice of voices) {
     const option = document.createElement("option");
@@ -147,7 +217,7 @@ function updateProviderVisibility() {
   externalFields.hidden = !isExternal;
   gptSovitsFields.hidden = provider !== "gptsovits";
   customBodyRow.hidden = provider !== "custom";
-  ttsStatusEl.textContent = provider === "none" ? "关闭" : "保存后开启";
+  ttsStatusEl.textContent = provider === "none" ? text("settings.tts.off") : text("settings.tts.afterSave");
 }
 
 function renderConfig() {
@@ -156,6 +226,9 @@ function renderConfig() {
   const persona = config.persona || {};
   const affection = config.affection || {};
   const profile = config.profile || {};
+  activeLanguage = config.resolvedLanguage || i18n.resolveLanguage(config.language, "zh-CN");
+  refreshLanguageOptions(config.language || "system");
+  applyStaticTranslations();
 
   personaNameEl.value = persona.name || "";
   personaPersonalityEl.value = persona.personality || "";
@@ -186,15 +259,31 @@ function renderConfig() {
   pitchEl.value = String(tts.pitch || 1);
 
   affectionEnabledEl.checked = affection.enabled !== false;
-  affectionLabelEl.value = affection.label || "好感";
+  affectionLabelEl.value = localizedDefaultValue(
+    affection.label,
+    ZH_AFFECTION_DEFAULTS.label,
+    "settings.affection.defaultLabel",
+  );
   affectionCurrentEl.value = String(profile.affection ?? 10);
   affectionMinutesPerPointEl.value = String(affection.minutesPerPoint || 10);
   affectionActiveWindowEl.value = String(affection.activeWindowMinutes || 15);
   affectionHappyThresholdEl.value = String(affection.happyThreshold || 50);
   affectionCloseThresholdEl.value = String(affection.closeThreshold || 75);
-  affectionLowToneEl.value = affection.lowTone || "";
-  affectionMediumToneEl.value = affection.mediumTone || "";
-  affectionHighToneEl.value = affection.highTone || "";
+  affectionLowToneEl.value = localizedDefaultValue(
+    affection.lowTone,
+    ZH_AFFECTION_DEFAULTS.lowTone,
+    "settings.affection.lowToneDefault",
+  );
+  affectionMediumToneEl.value = localizedDefaultValue(
+    affection.mediumTone,
+    ZH_AFFECTION_DEFAULTS.mediumTone,
+    "settings.affection.mediumToneDefault",
+  );
+  affectionHighToneEl.value = localizedDefaultValue(
+    affection.highTone,
+    ZH_AFFECTION_DEFAULTS.highTone,
+    "settings.affection.highToneDefault",
+  );
 
   updateRangeLabels();
   updateProviderVisibility();
@@ -206,26 +295,30 @@ function renderConfig() {
     || persona.background
     || persona.extraRules,
   );
-  personaStatusEl.textContent = hasPersona ? "已填写" : "待填写";
+  personaStatusEl.textContent = hasPersona ? text("settings.persona.ready") : text("settings.persona.pending");
   const llmReady = Boolean(assistant.baseUrl && assistant.model);
-  llmStatusEl.textContent = llmReady ? "已配置" : "未配置";
-  ttsStatusEl.textContent = tts.enabled ? "已开启" : "关闭";
-  affectionStatusEl.textContent = affection.enabled === false ? "关闭" : "已开启";
+  llmStatusEl.textContent = llmReady ? text("settings.llm.configured") : text("settings.llm.notConfigured");
+  ttsStatusEl.textContent = tts.enabled ? text("settings.tts.on") : text("settings.tts.off");
+  affectionStatusEl.textContent = affection.enabled === false ? text("settings.affection.disabled") : text("settings.affection.enabled");
   const chatMinutes = Math.floor(Number(profile.chatDurationMs || 0) / 60000);
   affectionRuleStatusEl.textContent = affection.enabled === false
-    ? "关闭后只保留当前数值，不会影响角色说话方式。"
-    : `当前 ${affection.label || "好感"} ${profile.affection ?? 0}/100，已累计有效聊天 ${chatMinutes} 分钟。只有持续聊天时间会让数值缓慢增长。`;
+    ? text("settings.affection.disabledRule")
+    : text("settings.affection.enabledRule", {
+      label: affection.label || text("settings.affection.defaultLabel"),
+      value: profile.affection ?? 0,
+      minutes: chatMinutes,
+    });
   keyStatusEl.textContent = assistant.hasApiKey
-    ? "已有聊天 API key。留空保存会保留原 key。"
-    : "没有聊天 API key；本地模型服务一般可以留空。";
+    ? text("settings.key.chatSaved")
+    : text("settings.key.chatEmpty");
   ttsKeyStatusEl.textContent = tts.hasApiKey
-    ? "已有语音 API key。留空保存会保留原 key。"
-    : "没有语音 API key；本地服务一般可以留空。";
+    ? text("settings.key.ttsSaved")
+    : text("settings.key.ttsEmpty");
   if (assistant.hasApiKey && assistant.canPersistApiKey === false) {
-    keyStatusEl.textContent = "已有聊天 API key，但当前系统不支持安全持久化，重启后需要重新填写。";
+    keyStatusEl.textContent = text("settings.key.chatEphemeral");
   }
   if (tts.hasApiKey && tts.canPersistApiKey === false) {
-    ttsKeyStatusEl.textContent = "已有语音 API key，但当前系统不支持安全持久化，重启后需要重新填写。";
+    ttsKeyStatusEl.textContent = text("settings.key.ttsEphemeral");
   }
 }
 
@@ -272,7 +365,7 @@ function readConfigForm(includeEmptyKey = false) {
   };
   const affection = {
     enabled: affectionEnabledEl.checked,
-    label: affectionLabelEl.value.trim() || "好感",
+    label: affectionLabelEl.value.trim() || text("settings.affection.defaultLabel"),
     minutesPerPoint: Number(affectionMinutesPerPointEl.value || 10),
     activeWindowMinutes: Number(affectionActiveWindowEl.value || 15),
     happyThreshold: Number(affectionHappyThresholdEl.value || 50),
@@ -286,7 +379,7 @@ function readConfigForm(includeEmptyKey = false) {
     affection: Number(affectionCurrentEl.value || 0),
   };
 
-  return { assistant, tts, persona, affection, profile };
+  return { language: languageEl.value, assistant, tts, persona, affection, profile };
 }
 
 async function saveConfig(includeEmptyKey = false) {
@@ -294,7 +387,7 @@ async function saveConfig(includeEmptyKey = false) {
   try {
     config = await window.desktopPet.saveChatConfig(readConfigForm(includeEmptyKey));
     renderConfig();
-    saveStatusEl.textContent = "设置已保存。";
+    saveStatusEl.textContent = text("settings.saved");
   } finally {
     saveSettingsButton.disabled = false;
   }
@@ -308,7 +401,7 @@ function chooseSystemVoice() {
 
 function playSystemTtsTest() {
   if (!("speechSynthesis" in window)) return false;
-  const utterance = new SpeechSynthesisUtterance("语音连接测试。");
+  const utterance = new SpeechSynthesisUtterance(text("settings.tts.testText"));
   const voice = chooseSystemVoice();
   if (voice) utterance.voice = voice;
   utterance.rate = Number(rateEl.value || 1);
@@ -320,12 +413,12 @@ function playSystemTtsTest() {
 
 async function testLlm() {
   testLlmButton.disabled = true;
-  llmTestStatusEl.textContent = "正在测试聊天连接...";
+  llmTestStatusEl.textContent = text("settings.llm.testing");
   try {
     const result = await window.desktopPet.testAssistantConnection(readConfigForm(false));
-    llmTestStatusEl.textContent = result.message || (result.ok ? "聊天连接成功。" : "聊天连接失败。");
+    llmTestStatusEl.textContent = result.message || (result.ok ? text("settings.llm.success") : text("settings.llm.failed"));
   } catch {
-    llmTestStatusEl.textContent = "聊天连接测试失败。";
+    llmTestStatusEl.textContent = text("settings.llm.testFailed");
   } finally {
     testLlmButton.disabled = false;
   }
@@ -333,18 +426,18 @@ async function testLlm() {
 
 async function testTts() {
   testTtsButton.disabled = true;
-  ttsTestStatusEl.textContent = "正在测试语音...";
+  ttsTestStatusEl.textContent = text("settings.tts.testing");
   try {
     const formConfig = readConfigForm(false);
     const result = await window.desktopPet.testTtsConnection(formConfig);
-    ttsTestStatusEl.textContent = result.message || (result.ok ? "语音连接成功。" : "语音连接失败。");
+    ttsTestStatusEl.textContent = result.message || (result.ok ? text("settings.tts.success") : text("settings.tts.failed"));
     if (result.audioDataUrl) {
       new Audio(result.audioDataUrl).play().catch(() => {});
     } else if (formConfig.tts.provider === "system" && result.ok && !playSystemTtsTest()) {
-      ttsTestStatusEl.textContent = "系统语音不可用。";
+      ttsTestStatusEl.textContent = text("settings.tts.systemUnavailable");
     }
   } catch {
-    ttsTestStatusEl.textContent = "语音连接测试失败。";
+    ttsTestStatusEl.textContent = text("settings.tts.testFailed");
   } finally {
     testTtsButton.disabled = false;
   }
@@ -352,8 +445,10 @@ async function testTts() {
 
 function applyChatState(state = {}) {
   config = state.config || config;
-  subtitleEl.textContent = `当前角色：${state.character?.name || "桌宠"}`;
+  config.language = state.language || config.language || "system";
+  config.resolvedLanguage = state.resolvedLanguage || config.resolvedLanguage || "zh-CN";
   renderConfig();
+  subtitleEl.textContent = text("chat.subtitle", { name: state.character?.name || text("app.name") });
 }
 
 async function initialize() {
@@ -375,8 +470,15 @@ backToChatButton.addEventListener("click", () => {
 rateEl.addEventListener("input", updateRangeLabels);
 pitchEl.addEventListener("input", updateRangeLabels);
 ttsProviderEl.addEventListener("change", updateProviderVisibility);
+languageEl.addEventListener("change", () => {
+  config.language = languageEl.value;
+  config.resolvedLanguage = i18n.resolveLanguage(languageEl.value, config.resolvedLanguage || "zh-CN");
+  renderConfig();
+});
 affectionEnabledEl.addEventListener("change", () => {
-  affectionStatusEl.textContent = affectionEnabledEl.checked ? "已开启" : "关闭";
+  affectionStatusEl.textContent = affectionEnabledEl.checked
+    ? text("settings.affection.enabled")
+    : text("settings.affection.disabled");
 });
 
 if ("speechSynthesis" in window) {
@@ -388,5 +490,5 @@ if ("speechSynthesis" in window) {
 window.desktopPet.onChatStateUpdated(applyChatState);
 
 initialize().catch(() => {
-  saveStatusEl.textContent = "设置窗口启动失败。";
+  saveStatusEl.textContent = text("settings.startFailed");
 });

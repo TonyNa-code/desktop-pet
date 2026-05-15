@@ -7,6 +7,7 @@ const inputEl = document.querySelector("#message-input");
 const sendButton = document.querySelector("#send-message");
 const statusEl = document.querySelector("#status");
 const clearHistoryButton = document.querySelector("#clear-history");
+const i18n = window.DesktopPetI18n;
 
 let config = {
   assistant: {
@@ -19,8 +20,22 @@ let config = {
   },
 };
 let history = [];
-let characterName = "桌宠";
+let characterName = "Desktop Pet";
 let sending = false;
+let activeLanguage = "zh-CN";
+
+function text(key, variables = {}) {
+  return i18n.t(key, variables, activeLanguage);
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = activeLanguage;
+  document.title = text("window.chatTitle");
+  openSettingsButton.textContent = text("chat.openSettings");
+  inputEl.placeholder = text("chat.placeholder");
+  sendButton.textContent = text("chat.send");
+  clearHistoryButton.textContent = text("chat.clear");
+}
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -28,7 +43,7 @@ function setStatus(text) {
 
 function timeText(timestamp) {
   if (!timestamp) return "";
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(activeLanguage, {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(timestamp));
@@ -39,13 +54,14 @@ function isLlmReady() {
 }
 
 function statusText() {
-  if (!isLlmReady()) return "还没有配置聊天模型。";
-  return config.tts?.enabled ? "已连接，回复会朗读。" : "已连接，朗读关闭。";
+  if (!isLlmReady()) return text("chat.notConfigured");
+  return config.tts?.enabled ? text("chat.connectedTts") : text("chat.connectedNoTts");
 }
 
 function renderHeader() {
-  titleEl.textContent = "伴侣对话";
-  subtitleEl.textContent = `当前角色：${characterName}`;
+  applyStaticTranslations();
+  titleEl.textContent = text("chat.title");
+  subtitleEl.textContent = text("chat.subtitle", { name: characterName });
   setStatus(statusText());
 }
 
@@ -54,9 +70,11 @@ function renderHistory() {
   if (!history.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = isLlmReady()
-      ? "<b>还没有消息</b><span>输入一句话开始聊天。</span>"
-      : "<b>需要先配置聊天模型</b><span>点右上角设置，填入 Base URL 和模型名。</span>";
+    const title = document.createElement("b");
+    const body = document.createElement("span");
+    title.textContent = isLlmReady() ? text("chat.emptyReadyTitle") : text("chat.emptyConfigTitle");
+    body.textContent = isLlmReady() ? text("chat.emptyReadyBody") : text("chat.emptyConfigBody");
+    empty.append(title, body);
     messagesEl.append(empty);
     return;
   }
@@ -69,7 +87,7 @@ function renderHistory() {
     bubble.textContent = item.content;
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = `${item.role === "user" ? "你" : characterName} ${timeText(item.createdAt)}`;
+    meta.textContent = `${item.role === "user" ? text("chat.you") : characterName} ${timeText(item.createdAt)}`;
     row.append(bubble, meta);
     messagesEl.append(row);
   }
@@ -78,8 +96,9 @@ function renderHistory() {
 
 function applyChatState(state = {}) {
   config = state.config || config;
+  activeLanguage = state.resolvedLanguage || config.resolvedLanguage || activeLanguage;
   history = Array.isArray(state.history) ? state.history : history;
-  characterName = state.character?.name || "桌宠";
+  characterName = state.character?.name || text("app.name");
   renderHeader();
   renderHistory();
 }
@@ -104,18 +123,18 @@ async function sendMessage(text) {
   sendButton.disabled = true;
   inputEl.value = "";
   appendLocalMessage("user", cleanText);
-  appendLocalMessage("assistant", "我想一下。");
-  setStatus("正在等待回复...");
+  appendLocalMessage("assistant", text("chat.thinking"));
+  setStatus(text("chat.waiting"));
 
   try {
     const result = await window.desktopPet.sendChatMessage(cleanText);
     history = Array.isArray(result.history) ? result.history : history;
     renderHistory();
-    setStatus(result.ok ? statusText() : "回复失败，请检查设置。");
+    setStatus(result.ok ? statusText() : text("chat.replyFailed"));
   } catch {
     history = history.slice(0, -1);
-    appendLocalMessage("assistant", "发送失败，稍后再试一下。");
-    setStatus("发送失败。");
+    appendLocalMessage("assistant", text("chat.sendFailedReply"));
+    setStatus(text("chat.sendFailed"));
   } finally {
     sending = false;
     sendButton.disabled = false;
@@ -146,11 +165,11 @@ inputEl.addEventListener("keydown", (event) => {
 clearHistoryButton.addEventListener("click", async () => {
   history = await window.desktopPet.clearChatHistory();
   renderHistory();
-  setStatus("聊天已清空。");
+  setStatus(text("chat.cleared"));
 });
 
 window.desktopPet.onChatStateUpdated(applyChatState);
 
 initialize().catch(() => {
-  setStatus("聊天窗口启动失败。");
+  setStatus(text("chat.startFailed"));
 });
