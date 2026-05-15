@@ -4,6 +4,14 @@
   "description": "A cross-platform desktop pet template built with Electron.",
   "author": "Desktop Pet Contributors",
   "license": "MIT",
+  "homepage": "https://github.com/TonyNa-code/desktop-pet#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TonyNa-code/desktop-pet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TonyNa-code/desktop-pet/issues"
+  },
   "main": "src/main.js",
   "private": false,
   "scripts": {
@@ -17,6 +25,11 @@
     "desktop-pet",
     "electron",
     "anime",
+    "ai-companion",
+    "tts",
+    "gptsovits",
+    "multilingual",
+    "cross-platform",
     "pet",
     "spritesheet"
   ],

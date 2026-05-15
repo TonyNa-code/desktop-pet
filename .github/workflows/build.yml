@@ -69,9 +69,19 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
+          cat > release-notes.md <<'EOF'
+          Latest Desktop Pet build.
+
+          Download the file for your operating system:
+          - Windows: Desktop-Pet-*-win-x64.exe
+          - macOS Apple Silicon: Desktop-Pet-*-mac-arm64.dmg or .zip
+          - Linux: Desktop-Pet-*-linux-x86_64.AppImage or Desktop-Pet-*-linux-x64.tar.gz
+
+          See README.md for English instructions, README.zh-CN.md for Simplified Chinese, and README.ja.md for Japanese.
+          EOF
           gh release delete latest --repo "$REPOSITORY" --yes --cleanup-tag || true
           gh release create latest release-assets/**/* \
             --repo "$REPOSITORY" \
             --target "$TARGET_SHA" \
             --title "Desktop Pet latest" \
-            --notes "Latest Desktop Pet build. Download the file for your operating system, then follow 快速上手指南.md."
+            --notes-file release-notes.md

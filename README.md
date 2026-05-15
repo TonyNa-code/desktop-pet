@@ -2,7 +2,37 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-A cross-platform desktop pet template for Windows, macOS, and Linux. It uses Electron for a transparent always-on-top pet window, and loads each character from a spritesheet plus a small `character.json` action manifest. The repository currently includes two built-in character packs, and more characters can be added with the same structure.
+[![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
+
+A cross-platform anime desktop pet for Windows, macOS, and Linux, with character packs, multilingual UI, chat model integration, and optional voice replies. It uses Electron for a transparent always-on-top pet window, and loads each character from a spritesheet plus a small `character.json` action manifest.
+
+<p align="center">
+  <img src="docs/desktop-pet-demo.gif" alt="Desktop Pet animated preview" width="256" />
+</p>
+
+## Quick Download
+
+Open the [latest release](https://github.com/TonyNa-code/desktop-pet/releases/latest), then download the file for your system:
+
+| System | Download | Notes |
+| --- | --- | --- |
+| Windows | `Desktop-Pet-*-win-x64.exe` | Installer for 64-bit Windows. |
+| macOS Apple Silicon | `Desktop-Pet-*-mac-arm64.dmg` | Recommended for M1/M2/M3/M4 Macs. |
+| macOS Apple Silicon, zipped app | `Desktop-Pet-*-mac-arm64.zip` | Use this if you prefer a zip package. |
+| Linux | `Desktop-Pet-*-linux-x86_64.AppImage` | Portable AppImage package. |
+| Linux archive | `Desktop-Pet-*-linux-x64.tar.gz` | Use this if AppImage is not suitable. |
+
+On macOS, if the system says the app cannot be verified, right-click the app and choose `Open`, then confirm once. This is common for unsigned open-source test builds.
+
+## Why Desktop Pet?
+
+- Built for small animated desktop companions, not a full chat client
+- Character packs are simple folders with `sprite.png`, `preview.png`, and `character.json`
+- Supports English, Simplified Chinese, Japanese, or following the system language
+- Optional chat and voice features can be left off for a lightweight pet experience
 
 ## Built-In Characters
 
@@ -11,7 +41,7 @@ A cross-platform desktop pet template for Windows, macOS, and Linux. It uses Ele
 | ![Default character preview](assets/characters/default/preview.png) | ![Luna character preview](assets/characters/luna/preview.png) |
 | Dynamic sample pack with idle, movement, waving, jumping, failed, and thinking actions. | Mostly static expression pack with tsundere, shy, surprised, happy, and thinking states. |
 
-## For Beginners
+## Beginner Guides
 
 If you only want to download and run the app, see [快速上手指南.md](快速上手指南.md). If you want to replace or create a character, see [角色更换与制作指南.md](角色更换与制作指南.md).
 
@@ -43,10 +73,6 @@ If you only want to download and run the app, see [快速上手指南.md](快速
   - Reply voice via system voice, local GPT-SoVITS inference service, or custom voice API
 - Settings are saved locally
 - GitHub Actions builds Windows / macOS / Linux packages and updates the latest release
-
-## Download
-
-Open the repository Releases page and download the `Desktop-Pet` file that matches your system.
 
 ## Run From Source
 
