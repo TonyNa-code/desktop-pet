@@ -1,6 +1,6 @@
 # Desktop Pet
 
-[中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 Windows / macOS / Linux で動く汎用デスクトップペットのテンプレートです。Electron で透明な常時手前表示ウィンドウを作り、各キャラクターは spritesheet と `character.json` のアクション設定から読み込みます。現在は2つの組み込みキャラクターパックがあり、同じ構成で別キャラクターも追加できます。
 
