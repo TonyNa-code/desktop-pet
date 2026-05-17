@@ -172,6 +172,28 @@ textarea:focus {
   gap: 10px;
 }
 
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-row button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-color: rgba(49, 110, 116, 0.18);
+  background: #f7fafb;
+  color: #315d62;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preset-row button:hover,
+.preset-row button:focus-visible {
+  background: #eaf2f3;
+  outline: none;
+}
+
 .button-row .hint {
   min-width: 0;
 }
@@ -285,13 +307,15 @@ textarea:focus {
 
   .split-row,
   .settings-footer,
-  .button-row {
+  .button-row,
+  .preset-row {
     grid-template-columns: 1fr;
   }
 
   .settings-header,
   .settings-footer,
-  .button-row {
+  .button-row,
+  .preset-row {
     align-items: stretch;
     flex-direction: column;
   }

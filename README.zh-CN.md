@@ -115,6 +115,8 @@ npm run build
 
 聊天模型区域填写：
 
+- 预设：`Ollama`、`LM Studio`、`DeepSeek`、`自定义接口` 会填入常见 Base URL 和模型名起点。
+- DeepSeek 预设：当前使用 `https://api.deepseek.com` 和 `deepseek-v4-flash` 作为低门槛起点；如果你的账号使用其它 DeepSeek 模型，可以自行改模型名。
 - `Base URL`：兼容常见 `/chat/completions` 格式的接口地址，例如本地模型服务 `http://localhost:11434/v1`，或云端模型平台提供的兼容地址
 - `模型名`：接口支持的模型名，本地和云端都需要填写
 - `API key`：需要鉴权的接口才填写，本地模型通常可以留空

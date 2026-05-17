@@ -13,6 +13,7 @@ const personaBackgroundEl = document.querySelector("#persona-background");
 const personaExtraRulesEl = document.querySelector("#persona-extra-rules");
 const baseUrlEl = document.querySelector("#base-url");
 const modelEl = document.querySelector("#model");
+const llmPresetButtons = [...document.querySelectorAll(".llm-preset")];
 const apiKeyEl = document.querySelector("#api-key");
 const keyStatusEl = document.querySelector("#key-status");
 const temperatureEl = document.querySelector("#temperature");
@@ -66,6 +67,28 @@ const ZH_AFFECTION_DEFAULTS = {
   lowTone: "保持礼貌但有一点距离感，回复简洁，不要过分亲昵。",
   mediumTone: "自然友好，带一点熟悉感，可以适度关心对方。",
   highTone: "更亲近、更信任，语气可以更温柔主动，但不要失去角色边界。",
+};
+const LLM_PRESETS = {
+  ollama: {
+    baseUrl: "http://localhost:11434/v1",
+    model: "llama3.1",
+    needsKey: false,
+  },
+  lmstudio: {
+    baseUrl: "http://localhost:1234/v1",
+    model: "local-model",
+    needsKey: false,
+  },
+  deepseek: {
+    baseUrl: "https://api.deepseek.com",
+    model: "deepseek-v4-flash",
+    needsKey: true,
+  },
+  custom: {
+    baseUrl: "",
+    model: "",
+    needsKey: true,
+  },
 };
 const i18n = window.DesktopPetI18n;
 
@@ -223,6 +246,38 @@ function updateProviderVisibility() {
   gptSovitsFields.hidden = provider !== "gptsovits";
   customBodyRow.hidden = provider !== "custom";
   ttsStatusEl.textContent = provider === "none" ? text("settings.tts.off") : text("settings.tts.afterSave");
+}
+
+function updateLlmDraftStatus() {
+  const hasBaseUrl = Boolean(baseUrlEl.value.trim());
+  const hasModel = Boolean(modelEl.value.trim());
+  if (hasBaseUrl && hasModel) {
+    llmStatusEl.textContent = text("settings.llm.readyToTest");
+  } else {
+    llmStatusEl.textContent = text("settings.llm.notConfigured");
+  }
+}
+
+function applyLlmPreset(presetName) {
+  const preset = LLM_PRESETS[presetName];
+  if (!preset) return;
+  baseUrlEl.value = preset.baseUrl;
+  modelEl.value = preset.model;
+  config.assistant = {
+    ...(config.assistant || {}),
+    baseUrl: preset.baseUrl,
+    model: preset.model,
+  };
+  updateLlmDraftStatus();
+  if (presetName === "custom") {
+    llmTestStatusEl.textContent = text("settings.llm.customPresetApplied");
+    baseUrlEl.focus();
+    return;
+  }
+  llmTestStatusEl.textContent = preset.needsKey
+    ? text("settings.llm.presetAppliedNeedsKey")
+    : text("settings.llm.presetApplied");
+  if (preset.needsKey) apiKeyEl.focus();
 }
 
 function renderCharacterCards() {
@@ -519,6 +574,11 @@ async function initialize() {
 saveSettingsButton.addEventListener("click", () => saveConfig(false));
 testLlmButton.addEventListener("click", testLlm);
 testTtsButton.addEventListener("click", testTts);
+for (const button of llmPresetButtons) {
+  button.addEventListener("click", () => applyLlmPreset(button.dataset.preset));
+}
+baseUrlEl.addEventListener("input", updateLlmDraftStatus);
+modelEl.addEventListener("input", updateLlmDraftStatus);
 clearKeyButton.addEventListener("click", () => {
   apiKeyEl.value = "";
   ttsApiKeyEl.value = "";

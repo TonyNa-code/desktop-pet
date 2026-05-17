@@ -115,6 +115,8 @@ npm run build
 
 チャットモデル設定：
 
+- プリセット：`Ollama`、`LM Studio`、`DeepSeek`、`カスタムAPI` は一般的な Base URL とモデル名の初期値を入力します。
+- DeepSeek プリセット：現在は `https://api.deepseek.com` と `deepseek-v4-flash` を低摩擦な初期値として使います。別の DeepSeek モデルを使う場合はモデル名を変更してください。
 - `Base URL`：`/chat/completions` 互換のエンドポイント。例：ローカルモデルサービスの `http://localhost:11434/v1`、または互換クラウドAPIのURL
 - `モデル名`：サービスが対応しているモデル名。ローカルでもクラウドでも必要です
 - `API key`：認証が必要なサービスだけ入力します。ローカルモデルでは通常空欄で構いません

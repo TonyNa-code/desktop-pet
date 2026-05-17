@@ -43,7 +43,7 @@
         </div>
         <label>
           <span data-i18n="settings.persona.name">角色称呼</span>
-          <input id="persona-name" type="text" placeholder="例如 桌宠、露娜、小助手" spellcheck="false" />
+          <input id="persona-name" type="text" placeholder="例如 桌宠、角色名、小助手" spellcheck="false" />
         </label>
         <label>
           <span data-i18n="settings.persona.personality">性格</span>
@@ -68,13 +68,20 @@
           <h2 data-i18n="settings.llm.title">聊天模型</h2>
           <span id="llm-status">未配置</span>
         </div>
+        <div class="preset-row" aria-label="Chat model presets">
+          <button class="llm-preset" type="button" data-preset="ollama" data-i18n="settings.llm.presetOllama">Ollama</button>
+          <button class="llm-preset" type="button" data-preset="lmstudio" data-i18n="settings.llm.presetLmStudio">LM Studio</button>
+          <button class="llm-preset" type="button" data-preset="deepseek" data-i18n="settings.llm.presetDeepSeek">DeepSeek</button>
+          <button class="llm-preset" type="button" data-preset="custom" data-i18n="settings.llm.presetCustom">自定义接口</button>
+        </div>
+        <p class="hint" data-i18n="settings.llm.presetHint">可以先点一个预设，再按你的服务实际情况修改模型名或 API key。</p>
         <label>
           <span>Base URL</span>
           <input id="base-url" type="url" placeholder="http://localhost:11434/v1" spellcheck="false" />
         </label>
         <label>
           <span data-i18n="settings.llm.model">模型名</span>
-          <input id="model" type="text" placeholder="例如 llama3.1、deepseek-chat、gpt-4.1-mini" spellcheck="false" />
+          <input id="model" type="text" placeholder="例如 llama3.1、deepseek-v4-flash、gpt-4.1-mini" spellcheck="false" />
         </label>
         <label>
           <span>API key</span>

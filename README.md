@@ -115,6 +115,8 @@ The settings window opens automatically on first launch. `Persona` controls the 
 
 Chat model fields:
 
+- Presets: `Ollama`, `LM Studio`, `DeepSeek`, and `Custom API` fill common Base URL and model-name starting points.
+- DeepSeek preset: uses `https://api.deepseek.com` and `deepseek-v4-flash` as a current low-friction starting point; adjust the model name if your account uses another DeepSeek model.
 - `Base URL`: a `/chat/completions` compatible endpoint, such as `http://localhost:11434/v1` for a local model service or a compatible cloud API URL
 - `Model Name`: the model name supported by the service; local and cloud services both need it
 - `API key`: only needed when the service requires authentication; local services usually leave it empty
