@@ -769,6 +769,7 @@ function publicChatConfig() {
   const { apiKey: ttsApiKey, ...tts } = settings.tts || DEFAULT_SETTINGS.tts;
   return {
     language: settings.language,
+    characterId: settings.characterId,
     resolvedLanguage: activeLanguage(),
     assistant: {
       ...assistant,
@@ -810,6 +811,7 @@ function applyChatConfigPatch(patch = {}) {
   applyProfileConfigPatch(patch.profile || {});
   const settingsPatch = {
     ...(patch.language !== undefined ? { language: patch.language } : {}),
+    ...(patch.characterId !== undefined ? { characterId: patch.characterId } : {}),
     assistant: assistantPatch,
     tts: ttsPatch,
     persona: { ...(patch.persona || {}), setupDone: true },
@@ -844,6 +846,7 @@ function settingsFromChatConfigPatch(patch = {}) {
   return normalizeSettings({
     ...settings,
     ...(patch.language !== undefined ? { language: patch.language } : {}),
+    ...(patch.characterId !== undefined ? { characterId: patch.characterId } : {}),
     assistant: {
       ...(settings.assistant || DEFAULT_SETTINGS.assistant),
       ...assistantPatch,
@@ -878,14 +881,30 @@ function addChatMessage(role, content) {
 }
 
 function chatState() {
+  const characters = listCharacterPacks().map((pack) => ({
+    id: pack.id,
+    name: pack.name,
+    description: pack.description,
+    previewPath: pack.previewPath,
+    spritePath: pack.spritePath,
+    stateCount: Object.keys(pack.states || {}).length,
+    automaticActionCount: pack.automaticActions.length,
+    clickActionCount: pack.clickActions.length,
+  }));
   return {
     language: settings.language,
     resolvedLanguage: activeLanguage(),
     config: publicChatConfig(),
     history: publicChatHistory(),
+    characters,
     character: (() => {
       const pack = getCharacterPack();
-      return pack ? { id: pack.id, name: pack.name, description: pack.description } : null;
+      return pack ? {
+        id: pack.id,
+        name: pack.name,
+        description: pack.description,
+        previewPath: pack.previewPath,
+      } : null;
     })(),
   };
 }

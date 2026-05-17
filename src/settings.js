@@ -1,5 +1,7 @@
 const subtitleEl = document.querySelector("#settings-subtitle");
 const languageEl = document.querySelector("#language");
+const characterStatusEl = document.querySelector("#character-status");
+const characterGridEl = document.querySelector("#character-grid");
 const personaStatusEl = document.querySelector("#persona-status");
 const llmStatusEl = document.querySelector("#llm-status");
 const ttsStatusEl = document.querySelector("#tts-status");
@@ -70,6 +72,7 @@ const i18n = window.DesktopPetI18n;
 let config = {
   language: "system",
   resolvedLanguage: "zh-CN",
+  characterId: "default",
   assistant: {
     baseUrl: "",
     model: "",
@@ -124,6 +127,8 @@ let config = {
 };
 let selectedVoiceName = "";
 let activeLanguage = "zh-CN";
+let characters = [];
+let selectedCharacterId = "default";
 
 function text(key, variables = {}) {
   return i18n.t(key, variables, activeLanguage);
@@ -220,6 +225,58 @@ function updateProviderVisibility() {
   ttsStatusEl.textContent = provider === "none" ? text("settings.tts.off") : text("settings.tts.afterSave");
 }
 
+function renderCharacterCards() {
+  characterGridEl.textContent = "";
+  if (!characters.length) {
+    characterStatusEl.textContent = text("settings.character.empty");
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = text("settings.character.empty");
+    characterGridEl.append(empty);
+    return;
+  }
+
+  const activeCharacter = characters.find((character) => character.id === selectedCharacterId) || characters[0];
+  selectedCharacterId = activeCharacter.id;
+  characterStatusEl.textContent = text("settings.character.current", { name: activeCharacter.name });
+
+  for (const character of characters) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "character-card";
+    card.classList.toggle("selected", character.id === selectedCharacterId);
+    card.setAttribute("aria-pressed", character.id === selectedCharacterId ? "true" : "false");
+
+    const image = document.createElement("img");
+    image.src = character.previewPath || character.spritePath || "";
+    image.alt = character.name;
+    image.loading = "lazy";
+
+    const content = document.createElement("span");
+    const name = document.createElement("b");
+    const description = document.createElement("span");
+    const meta = document.createElement("span");
+    name.textContent = character.name;
+    description.className = "description";
+    description.textContent = character.description || text("settings.character.noDescription");
+    meta.className = "meta";
+    meta.textContent = text("settings.character.meta", {
+      actions: character.stateCount || 0,
+      click: character.clickActionCount || 0,
+    });
+    content.append(name, description, meta);
+    card.append(image, content);
+
+    card.addEventListener("click", () => {
+      selectedCharacterId = character.id;
+      config.characterId = character.id;
+      saveStatusEl.textContent = text("settings.character.changed");
+      renderCharacterCards();
+    });
+    characterGridEl.append(card);
+  }
+}
+
 function renderConfig() {
   const assistant = config.assistant || {};
   const tts = config.tts || {};
@@ -227,8 +284,10 @@ function renderConfig() {
   const affection = config.affection || {};
   const profile = config.profile || {};
   activeLanguage = config.resolvedLanguage || i18n.resolveLanguage(config.language, "zh-CN");
+  selectedCharacterId = config.characterId || selectedCharacterId || "default";
   refreshLanguageOptions(config.language || "system");
   applyStaticTranslations();
+  renderCharacterCards();
 
   personaNameEl.value = persona.name || "";
   personaPersonalityEl.value = persona.personality || "";
@@ -379,7 +438,7 @@ function readConfigForm(includeEmptyKey = false) {
     affection: Number(affectionCurrentEl.value || 0),
   };
 
-  return { language: languageEl.value, assistant, tts, persona, affection, profile };
+  return { language: languageEl.value, characterId: selectedCharacterId, assistant, tts, persona, affection, profile };
 }
 
 async function saveConfig(includeEmptyKey = false) {
@@ -447,6 +506,8 @@ function applyChatState(state = {}) {
   config = state.config || config;
   config.language = state.language || config.language || "system";
   config.resolvedLanguage = state.resolvedLanguage || config.resolvedLanguage || "zh-CN";
+  characters = Array.isArray(state.characters) ? state.characters : characters;
+  selectedCharacterId = config.characterId || state.character?.id || selectedCharacterId;
   renderConfig();
   subtitleEl.textContent = text("chat.subtitle", { name: state.character?.name || text("app.name") });
 }

@@ -68,6 +68,7 @@ If you only want to download and run the app, see [快速上手指南.md](快速
   - Minimal quick input window with replies shown in the pet bubble
   - Small floating chat window
   - Separate chat settings window
+  - Visual character picker in settings
   - Compatible `/chat/completions` style chat services
   - Custom persona, speaking style, and optional affection stages
   - Automatic pet expression changes based on replies

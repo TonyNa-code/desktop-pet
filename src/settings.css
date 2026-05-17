@@ -201,6 +201,74 @@ textarea:focus {
   gap: 12px;
 }
 
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
+}
+
+.character-card {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  align-items: center;
+  min-height: 86px;
+  padding: 10px;
+  border: 1px solid rgba(37, 40, 45, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #25282d;
+  text-align: left;
+}
+
+.character-card:hover,
+.character-card:focus-visible {
+  border-color: rgba(49, 110, 116, 0.44);
+  background: #f7fafb;
+  outline: none;
+}
+
+.character-card.selected {
+  border-color: rgba(49, 110, 116, 0.72);
+  box-shadow: 0 0 0 3px rgba(49, 110, 116, 0.12);
+}
+
+.character-card img {
+  width: 56px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #f2f5f6;
+}
+
+.character-card b,
+.character-card span {
+  display: block;
+}
+
+.character-card b {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.character-card .description {
+  display: -webkit-box;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #65717a;
+  font-size: 12px;
+  font-weight: 500;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.character-card .meta {
+  margin-top: 5px;
+  color: #849099;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 #save-settings {
   background: #23474b;
   color: #ffffff;
