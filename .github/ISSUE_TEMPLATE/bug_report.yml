@@ -1,0 +1,46 @@
+name: Bug Report
+description: Report a crash, broken menu, package issue, or unexpected behavior.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please remove API keys, private chat logs, and exact local home paths before posting.
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - Windows
+        - macOS Apple Silicon
+        - macOS Intel
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App Version Or Commit
+      placeholder: "0.1.0, latest release, or commit hash"
+  - type: textarea
+    id: problem
+    attributes:
+      label: What Happened?
+      description: Describe the visible problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps To Reproduce
+      placeholder: |
+        1. Start the app
+        2. Right-click the pet
+        3. Choose ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs Or Screenshots
+      description: Add safe logs, screenshots, or GIFs if they help explain the issue.

@@ -19,7 +19,8 @@ Open the [latest release](https://github.com/TonyNa-code/desktop-pet/releases/la
 
 | System | Download | Notes |
 | --- | --- | --- |
-| Windows | `Desktop-Pet-*-win-x64.exe` | Installer for 64-bit Windows. |
+| Windows installer | `Desktop-Pet-*-win-x64-setup.exe` | Installer for 64-bit Windows. |
+| Windows portable | `Desktop-Pet-*-win-x64-portable.exe` | Portable build for 64-bit Windows. |
 | macOS Apple Silicon | `Desktop-Pet-*-mac-arm64.dmg` | Recommended for M1/M2/M3/M4 Macs. |
 | macOS Apple Silicon, zipped app | `Desktop-Pet-*-mac-arm64.zip` | Use this if you prefer a zip package. |
 | Linux | `Desktop-Pet-*-linux-x86_64.AppImage` | Portable AppImage package. |
@@ -85,6 +86,12 @@ npm start
 
 ```bash
 npm run check
+```
+
+This validates JavaScript syntax, character-pack dimensions, and common privacy leaks such as local paths or committed secrets.
+
+```bash
+npm run privacy:check
 ```
 
 ## Build
@@ -168,6 +175,10 @@ To add a character, create a new folder under `assets/characters/` with the same
 The app stores simple local state such as window settings, character settings, persona, chat configuration, affection value, and active chat time.
 
 These files stay in the app data directory on this device and are not uploaded to the repository or network.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, pull request checks, and character-pack contribution notes.
 
 ## License
 

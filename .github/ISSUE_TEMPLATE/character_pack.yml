@@ -1,0 +1,29 @@
+name: Character Pack Help
+description: Ask for help with spritesheets, manifests, previews, or character switching.
+title: "[Character Pack]: "
+labels: ["character-pack"]
+body:
+  - type: textarea
+    id: issue
+    attributes:
+      label: What Are You Trying To Make?
+      description: Describe the character-pack problem or goal.
+    validations:
+      required: true
+  - type: textarea
+    id: manifest
+    attributes:
+      label: character.json
+      description: Paste the manifest if it is safe to share.
+      render: json
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation Output
+      description: Paste the output of `npm run validate:assets` if it fails.
+      render: shell
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot Or Preview
+      description: Add a screenshot if the alignment, scale, or transparency looks wrong.

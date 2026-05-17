@@ -1,0 +1,30 @@
+name: Feature Request
+description: Suggest a new interaction, setting, language, or integration.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What Would You Like?
+      description: Describe the feature from the user's point of view.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Pet interaction
+        - Character packs
+        - Chat model integration
+        - Voice / TTS
+        - Language / translation
+        - Packaging / release
+        - Documentation
+        - Other
+  - type: textarea
+    id: notes
+    attributes:
+      label: Extra Context
+      description: Add mockups, examples, or links if useful.

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Latest Release
+    url: https://github.com/TonyNa-code/desktop-pet/releases/latest
+    about: Download the newest Windows, macOS, or Linux build.
+  - name: Beginner Guide
+    url: https://github.com/TonyNa-code/desktop-pet/blob/main/%E5%BF%AB%E9%80%9F%E4%B8%8A%E6%89%8B%E6%8C%87%E5%8D%97.md
+    about: Step-by-step run guide in Simplified Chinese.

@@ -1,7 +1,7 @@
 {
   "name": "desktop-pet",
   "version": "0.1.0",
-  "description": "A cross-platform desktop pet template built with Electron.",
+  "description": "A cross-platform anime desktop pet with character packs, chat, TTS, and multilingual UI.",
   "author": "Desktop Pet Contributors",
   "license": "MIT",
   "homepage": "https://github.com/TonyNa-code/desktop-pet#readme",
@@ -17,7 +17,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && node scripts/validate-assets.js",
+    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && node scripts/validate-assets.js && node scripts/privacy-check.js",
+    "privacy:check": "node scripts/privacy-check.js",
     "validate:assets": "node scripts/validate-assets.js",
     "build": "electron-builder"
   },
@@ -63,6 +64,12 @@
         "portable"
       ],
       "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "artifactName": "Desktop-Pet-${version}-win-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Desktop-Pet-${version}-win-${arch}-portable.${ext}"
     },
     "linux": {
       "target": [

@@ -2,20 +2,51 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-一个可以在 Windows / macOS / Linux 上运行的通用桌宠模板。它使用 Electron 做透明置顶窗口，通过角色包加载 spritesheet、动作配置和预览图；当前仓库内置两套角色素材，以后可以按同样规格替换成其他角色。
+[![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
-## Built-In Characters
+一个可以在 Windows / macOS / Linux 上运行的二次元桌宠项目，支持角色包、多语言界面、聊天模型接入和可选语音朗读。它使用 Electron 做透明置顶窗口，每个角色由 spritesheet、预览图和 `character.json` 动作配置加载。
+
+<p align="center">
+  <img src="docs/desktop-pet-demo.gif" alt="Desktop Pet animated preview" width="256" />
+</p>
+
+## 快速下载
+
+打开 [latest release](https://github.com/TonyNa-code/desktop-pet/releases/latest)，按系统下载对应文件：
+
+| 系统 | 下载文件 | 说明 |
+| --- | --- | --- |
+| Windows 安装版 | `Desktop-Pet-*-win-x64-setup.exe` | 适合 64 位 Windows。 |
+| Windows 便携版 | `Desktop-Pet-*-win-x64-portable.exe` | 不想安装时使用。 |
+| macOS Apple Silicon | `Desktop-Pet-*-mac-arm64.dmg` | 推荐给 M1/M2/M3/M4 Mac。 |
+| macOS 压缩包 | `Desktop-Pet-*-mac-arm64.zip` | 偏好 zip 包时使用。 |
+| Linux | `Desktop-Pet-*-linux-x86_64.AppImage` | 便携 AppImage 包。 |
+| Linux 压缩包 | `Desktop-Pet-*-linux-x64.tar.gz` | AppImage 不适用时使用。 |
+
+macOS 如果提示无法验证开发者，右键 app 选择 `打开`，再确认一次即可。开源测试版没有商业签名时比较常见。
+
+## 为什么是 Desktop Pet？
+
+- 它首先是一个小型桌面陪伴工具，不是臃肿聊天客户端。
+- 角色包只是 `sprite.png`、`preview.png` 和 `character.json`，结构清楚。
+- 支持跟随系统、简体中文、English、日本語。
+- 聊天和语音都可以关闭，只保留轻量桌宠体验。
+
+## 内置角色
 
 | Default Character | Luna |
 | --- | --- |
 | ![Default character preview](assets/characters/default/preview.png) | ![Luna character preview](assets/characters/luna/preview.png) |
 | 动态动作样例，包含待机、移动、挥手、跳起、失败和思考动作。 | 偏静态表情动作包，包含傲娇、害羞、惊讶、开心、思考等表情状态。 |
 
-## For Beginners
+## 使用指南
 
 如果只是想下载后直接运行，请看 [快速上手指南.md](快速上手指南.md)。如果想换角色或制作新角色，请看 [角色更换与制作指南.md](角色更换与制作指南.md)。
 
-## Features
+## 功能
 
 - 透明、无边框、置顶小窗口
 - 界面语言支持跟随系统、简体中文、English、日本語
@@ -44,24 +75,26 @@
 - 设置会自动保存到本机
 - GitHub Actions 可在 Windows / macOS / Linux 上构建安装包并更新 Release
 
-## Download
-
-打开项目页面右侧的 Releases，下载 `Desktop-Pet` 开头、与你系统匹配的文件。
-
-## Run From Source
+## 源码运行
 
 ```bash
 npm install
 npm start
 ```
 
-## Validate
+## 校验
 
 ```bash
 npm run check
 ```
 
-## Build
+这会检查 JavaScript 语法、角色素材尺寸，以及常见隐私泄漏，例如本机路径或误提交的密钥。
+
+```bash
+npm run privacy:check
+```
+
+## 打包
 
 ```bash
 npm run build
@@ -69,7 +102,7 @@ npm run build
 
 本地构建只能稳定生成当前系统对应的平台包。GitHub Actions 会分别在 Windows、macOS 和 Linux runner 上构建三端产物。
 
-## Chat, Persona, And Voice
+## 对话、人物设定与语音
 
 语言可以在 `右键菜单 > 语言` 或 `对话设置 > 通用 > 界面语言` 里切换。它会影响菜单、窗口、提示气泡和默认对话语言。
 
@@ -99,7 +132,7 @@ API key 只保存在本机。应用会优先用系统安全存储加密；如果
 
 桌宠收到回复时会显示更大的气泡，并根据回复内容切换到适合的表情或动作。
 
-## Character Packs
+## 角色包
 
 内置角色包：
 
@@ -141,12 +174,16 @@ assets/characters/
 
 更完整的角色替换步骤、动作表规格和 AI 生图提示词模板见 [角色更换与制作指南.md](角色更换与制作指南.md)。
 
-## Local State
+## 本地状态
 
 应用会在本机保存简单状态，例如窗口设置、角色设置、人物设定、聊天配置、好感度数值和有效聊天时长。
 
 这些状态只保存在本机应用数据目录，不会上传到仓库或网络。
 
-## License
+## 贡献
+
+本地开发、PR 检查和角色包贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 许可证
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
