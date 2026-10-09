@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, screen } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -103,6 +103,9 @@ async function run() {
   assert.equal(await evaluate(settings, () => document.querySelector("#api-key").value), "unsaved-test-key");
   await evaluate(pet, () => window.desktopPet.setSettings({ scale: 1.5 }));
   await until(() => pet.getBounds().width === 320 && pet.getBounds().height === 444, "pet size");
+  const bounds = pet.getBounds();
+  const workArea = screen.getDisplayMatching(bounds).workArea;
+  assert.ok(bounds.y >= workArea.y && bounds.y + bounds.height <= workArea.y + workArea.height);
   assert.equal(await evaluate(settings, () => document.querySelector("#persona-name").value), "Test Character");
   await evaluate(settings, () => {
     document.querySelector("#api-key").value = "";

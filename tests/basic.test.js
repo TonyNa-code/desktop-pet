@@ -101,3 +101,15 @@ test("dragging moves the native window by the cursor delta and stops on release"
   app.run("endDrag()");
   assert.equal(app.run("moveDrag().dx"), 0);
 });
+
+test("enlarging the pet preserves its bottom edge and stays on the current display", () => {
+  const area = { x: -1280, y: 0, width: 1280, height: 800 };
+  const app = loadMain({ screen: { getDisplayMatching: () => ({ workArea: area }) } });
+  app.run('settings.scale = 2; globalThis.resized = null; mainWindow = {getBounds:()=>({x:-320,y:388,width:320,height:340}),setBounds:(bounds)=>{resized=bounds}}');
+  app.run("applyWindowSize()");
+  const bounds = app.run("resized");
+  assert.equal(bounds.y + bounds.height, 728);
+  assert.ok(bounds.x >= area.x);
+  assert.ok(bounds.x + bounds.width <= area.x + area.width);
+  assert.ok(bounds.y >= area.y);
+});

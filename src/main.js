@@ -502,8 +502,13 @@ function applyWindowSize(keepCenter = true) {
   const nextSize = displaySize();
   const bounds = mainWindow.getBounds();
   const x = keepCenter ? Math.round(bounds.x + bounds.width / 2 - nextSize.width / 2) : bounds.x;
-  const y = bounds.y;
-  mainWindow.setBounds({ x, y, ...nextSize }, true);
+  const y = bounds.y + bounds.height - nextSize.height;
+  const area = screen.getDisplayMatching(bounds).workArea;
+  mainWindow.setBounds({
+    x: clamp(x, area.x, Math.max(area.x, area.x + area.width - nextSize.width)),
+    y: clamp(y, area.y, Math.max(area.y, area.y + area.height - nextSize.height)),
+    ...nextSize,
+  }, true);
 }
 
 function createWindow() {
