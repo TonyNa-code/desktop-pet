@@ -12,6 +12,10 @@ env:
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build ${{ matrix.os }}
@@ -39,6 +43,22 @@ jobs:
       - name: Validate
         run: npm run check
 
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:smoke -- --no-sandbox
+
+      - name: Smoke test (Windows and macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:smoke
+
+      - name: Upload smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ runner.os }}
+          path: out/smoke/*.png
+          if-no-files-found: ignore
+
       - name: Build
         run: npm run build -- --publish never
 
@@ -55,38 +75,53 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Update Latest Release
+    name: Publish Versioned Release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
+          pattern: desktop-pet-*
+          merge-multiple: true
 
-      - name: Create latest release
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          cat > release-notes.md <<'EOF'
-          Latest Desktop Pet build.
-
-          Download the file for your operating system:
-          - Windows installer: Desktop-Pet-*-win-x64-setup.exe
-          - Windows portable: Desktop-Pet-*-win-x64-portable.exe
-          - macOS Apple Silicon: Desktop-Pet-*-mac-arm64.dmg or .zip
-          - Linux: Desktop-Pet-*-linux-x86_64.AppImage or Desktop-Pet-*-linux-x64.tar.gz
-
-          See README.md for English instructions, README.zh-CN.md for Simplified Chinese, and README.ja.md for Japanese.
-          EOF
-          gh release delete latest --repo "$REPOSITORY" --yes --cleanup-tag || true
-          gh release create latest release-assets/**/* \
-            --repo "$REPOSITORY" \
-            --target "$TARGET_SHA" \
-            --title "Desktop Pet latest" \
-            --notes-file release-notes.md
+          VERSION=$(node -p 'require("./package.json").version')
+          TAG="v$VERSION"
+          NOTES="docs/releases/$TAG.md"
+          if gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft > release-draft-state.txt; then
+            if [ "$(cat release-draft-state.txt)" = "false" ]; then
+              echo "Version $TAG is already published."
+              exit 0
+            fi
+            EXISTING_TARGET=$(gh release view "$TAG" --repo "$REPOSITORY" --json targetCommitish --jq .targetCommitish)
+            test "$EXISTING_TARGET" = "$TARGET_SHA"
+          fi
+          test -f "$NOTES"
+          for SUFFIX in win-x64-setup.exe win-x64-portable.exe mac-arm64.dmg mac-arm64.zip linux-x86_64.AppImage linux-x64.tar.gz; do
+            test -s "release-assets/Desktop-Pet-$VERSION-$SUFFIX"
+          done
+          (cd release-assets && sha256sum Desktop-Pet-* > SHA256SUMS.txt)
+          if [ "$(cat release-draft-state.txt)" = "true" ]; then
+            gh release upload "$TAG" release-assets/* --repo "$REPOSITORY" --clobber
+          else
+            gh release create "$TAG" release-assets/* \
+              --repo "$REPOSITORY" \
+              --target "$TARGET_SHA" \
+              --title "Desktop Pet $VERSION" \
+              --notes-file "$NOTES" \
+              --draft
+          fi
+          gh release edit "$TAG" --repo "$REPOSITORY" --draft=false --latest

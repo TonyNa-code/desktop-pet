@@ -7,6 +7,8 @@ const textExtensions = new Set([
   ".css",
   ".html",
   ".js",
+  ".cjs",
+  ".mjs",
   ".json",
   ".md",
   ".txt",
@@ -34,12 +36,12 @@ const denyPatterns = [
 
 function listGitFiles() {
   try {
-    return execFileSync("git", ["ls-files"], {
+    return execFileSync("git", ["ls-files", "-z"], {
       cwd: repoRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     })
-      .split(/\r?\n/)
+      .split("\0")
       .filter(Boolean);
   } catch {
     return null;
@@ -75,12 +77,12 @@ function lineAndColumn(source, index) {
 
 function listGitCandidateFiles() {
   try {
-    return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
+    return execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
       cwd: repoRoot,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     })
-      .split(/\r?\n/)
+      .split("\0")
       .filter(Boolean);
   } catch {
     return null;

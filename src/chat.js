@@ -22,6 +22,10 @@ let config = {
 let history = [];
 let characterName = "Desktop Pet";
 let sending = false;
+let remoteBusy = false;
+let pendingMessage = null;
+let chatRevision = 0;
+let sendToken = 0;
 let activeLanguage = "zh-CN";
 
 function text(key, variables = {}) {
@@ -62,12 +66,12 @@ function renderHeader() {
   applyStaticTranslations();
   titleEl.textContent = text("chat.title");
   subtitleEl.textContent = text("chat.subtitle", { name: characterName });
-  setStatus(statusText());
+  setStatus(sending || remoteBusy ? text("chat.waiting") : statusText());
 }
 
 function renderHistory() {
   messagesEl.textContent = "";
-  if (!history.length) {
+  if (!history.length && !pendingMessage) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     const title = document.createElement("b");
@@ -79,7 +83,11 @@ function renderHistory() {
     return;
   }
 
-  for (const item of history) {
+  const visibleHistory = pendingMessage ? [...history,
+    { ...pendingMessage, role: "user" },
+    { content: text("chat.thinking"), role: "assistant" },
+  ] : history;
+  for (const item of visibleHistory) {
     const row = document.createElement("article");
     row.className = `message ${item.role === "user" ? "user" : "assistant"}`;
     const bubble = document.createElement("div");
@@ -95,6 +103,15 @@ function renderHistory() {
 }
 
 function applyChatState(state = {}) {
+  if (Number.isFinite(state.revision) && state.revision < chatRevision) return;
+  if (Number.isFinite(state.revision) && state.revision > chatRevision) {
+    chatRevision = state.revision;
+    sendToken += 1;
+    sending = false;
+  }
+  remoteBusy = state.busy === true;
+  pendingMessage = state.pending || null;
+  sendButton.disabled = sending || remoteBusy;
   config = state.config || config;
   activeLanguage = state.resolvedLanguage || config.resolvedLanguage || activeLanguage;
   history = Array.isArray(state.history) ? state.history : history;
@@ -115,30 +132,38 @@ function appendLocalMessage(role, content) {
   renderHistory();
 }
 
-async function sendMessage(text) {
-  if (sending) return;
-  const cleanText = text.trim();
+async function sendMessage(messageText) {
+  if (sending || remoteBusy) return;
+  const cleanText = messageText.trim();
   if (!cleanText) return;
   sending = true;
+  const token = ++sendToken;
   sendButton.disabled = true;
   inputEl.value = "";
-  appendLocalMessage("user", cleanText);
-  appendLocalMessage("assistant", text("chat.thinking"));
-  setStatus(text("chat.waiting"));
-
   try {
+    pendingMessage = { content: cleanText, createdAt: Date.now() };
+    renderHistory();
+    setStatus(text("chat.waiting"));
     const result = await window.desktopPet.sendChatMessage(cleanText);
+    if (token !== sendToken || result.cancelled || result.revision < chatRevision) return;
+    pendingMessage = result.pending || null;
+    remoteBusy = result.busy === true;
+    if (result.error === "chat_busy" && !inputEl.value) inputEl.value = cleanText;
     history = Array.isArray(result.history) ? result.history : history;
     renderHistory();
-    setStatus(result.ok ? statusText() : text("chat.replyFailed"));
+    setStatus(remoteBusy ? text("chat.waiting") : result.ok ? statusText() : text("chat.replyFailed"));
   } catch {
-    history = history.slice(0, -1);
+    if (token !== sendToken) return;
+    pendingMessage = null;
+    appendLocalMessage("user", cleanText);
     appendLocalMessage("assistant", text("chat.sendFailedReply"));
     setStatus(text("chat.sendFailed"));
   } finally {
-    sending = false;
-    sendButton.disabled = false;
-    inputEl.focus();
+    if (token === sendToken) {
+      sending = false;
+      sendButton.disabled = remoteBusy;
+      inputEl.focus();
+    }
   }
 }
 
@@ -163,9 +188,12 @@ inputEl.addEventListener("keydown", (event) => {
 });
 
 clearHistoryButton.addEventListener("click", async () => {
-  history = await window.desktopPet.clearChatHistory();
-  renderHistory();
-  setStatus(text("chat.cleared"));
+  try {
+    applyChatState(await window.desktopPet.clearChatHistory());
+    setStatus(text("chat.cleared"));
+  } catch {
+    setStatus(text("chat.clearFailed"));
+  }
 });
 
 window.desktopPet.onChatStateUpdated(applyChatState);

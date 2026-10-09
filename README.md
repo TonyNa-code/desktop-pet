@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
+**0.1.1 maintenance update:** fixes chat sending, settings drafts, and API key handling when changing services, and updates packaging dependencies. Updating from 0.1.0 is recommended. [Release notes](docs/releases/v0.1.1.md).
+
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -89,7 +91,13 @@ npm start
 npm run check
 ```
 
-This validates JavaScript syntax, character-pack dimensions, and common privacy leaks such as local paths or committed secrets.
+This checks chat and settings behavior, JavaScript syntax, character-pack dimensions, and common privacy leaks such as local paths or committed secrets.
+
+```bash
+npm run test:smoke
+```
+
+This opens the app with temporary settings and local test services, exercises the main windows, and verifies settings after a restart. It does not use personal settings or contact a model provider. Release builds run this check on all three operating systems before publication.
 
 ```bash
 npm run privacy:check

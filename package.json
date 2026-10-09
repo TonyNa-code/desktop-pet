@@ -1,6 +1,6 @@
 {
   "name": "desktop-pet",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A cross-platform anime desktop pet with character packs, chat, TTS, and multilingual UI.",
   "author": "Desktop Pet Contributors",
   "license": "MIT",
@@ -17,7 +17,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && node scripts/validate-assets.js && node scripts/privacy-check.js",
+    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && npm test && node scripts/validate-assets.js && node scripts/privacy-check.js",
+    "test": "node --test tests/*.test.js",
+    "test:smoke": "node tests/run-electron-smoke.cjs",
     "privacy:check": "node scripts/privacy-check.js",
     "validate:assets": "node scripts/validate-assets.js",
     "build": "electron-builder"
@@ -35,8 +37,8 @@
     "spritesheet"
   ],
   "devDependencies": {
-    "electron": "^42.0.1",
-    "electron-builder": "^26.0.12"
+    "electron": "^42.11.12",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "app.desktop.pet",

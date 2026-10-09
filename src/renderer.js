@@ -62,6 +62,9 @@ let hoverReadyAt = 0;
 let bubbleTimer;
 let didShowStartupGreeting = false;
 let activeLanguage = "zh-CN";
+let spriteLoadToken = 0;
+let speechToken = 0;
+let activeAudio = null;
 
 function text(key, variables = {}) {
   return i18n.t(key, variables, activeLanguage);
@@ -190,6 +193,7 @@ function applyAppState(nextAppState = {}) {
   const nextCharacter = normalizeCharacter(nextAppState.activeCharacter);
   const characterChanged = nextCharacter.id !== character.id;
   const modeChanged = nextAppState.settings?.expressionMode !== settings.expressionMode;
+  const previousTts = JSON.stringify(settings.tts);
   character = nextCharacter;
   settings = {
     language: nextAppState.settings?.language || nextAppState.language || "system",
@@ -210,16 +214,27 @@ function applyAppState(nextAppState = {}) {
       pitch: Number(nextAppState.settings?.tts?.pitch) || 1,
     },
   };
+  if (characterChanged || previousTts !== JSON.stringify(settings.tts)) stopSpeech();
   activeLanguage = settings.resolvedLanguage;
   document.documentElement.lang = activeLanguage;
   applyPetLayout();
 
   if (characterChanged || !spriteImage) {
+    const token = ++spriteLoadToken;
+    temporaryToken += 1;
     window.clearInterval(animationTimer);
+    window.clearTimeout(idleTimer);
     spriteImage = null;
-    loadSprite()
-      .then(() => resetAfterSettingsChange())
-      .catch((error) => console.error("Unable to load character sprite", error));
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    loadSprite(character.spritePath)
+      .then((image) => {
+        if (token !== spriteLoadToken) return;
+        spriteImage = image;
+        resetAfterSettingsChange();
+      })
+      .catch((error) => {
+        if (token === spriteLoadToken) console.error("Unable to load character sprite", error);
+      });
     return;
   }
 
@@ -227,11 +242,16 @@ function applyAppState(nextAppState = {}) {
 }
 
 function resetAfterSettingsChange() {
+  temporaryToken += 1;
+  state = "idle";
+  frameIndex = 0;
   if (settings.expressionMode === "clickOnly") {
     window.clearTimeout(idleTimer);
+    const currentIndex = character.staticExpressions.findIndex((expression) => expression.state === "idle" && expression.frame === 0);
+    clickExpressionIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
     setStaticExpression("idle", 0);
   } else {
-    setState("idle");
+    startAnimation();
     scheduleIdleBehavior();
   }
   scheduleStartupGreeting();
@@ -295,7 +315,14 @@ function beginDrag(event) {
   window.clearInterval(dragInterval);
   dragInterval = window.setInterval(async () => {
     if (!dragStart) return;
-    const movement = await window.desktopPet.dragMove();
+    const activeDrag = dragStart;
+    let movement;
+    try {
+      movement = await window.desktopPet.dragMove();
+    } catch {
+      return;
+    }
+    if (dragStart !== activeDrag) return;
     if (Math.abs(movement.dx) > 2 || Math.abs(movement.dy) > 2) {
       didDrag = true;
       if (Math.abs(movement.dx) > 4) {
@@ -328,7 +355,7 @@ function endDrag(event) {
   }
 
   if (heldDuration > 450) {
-    handleLongPress();
+    if (settings.expressionMode !== "clickOnly") handleLongPress();
     return;
   }
   if (settings.expressionMode === "clickOnly") {
@@ -365,13 +392,29 @@ function chooseTtsVoice() {
     || voices[0];
 }
 
+function stopSpeech() {
+  speechToken += 1;
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.src = "";
+    activeAudio = null;
+  }
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
 async function speakText(text) {
+  stopSpeech();
+  const token = speechToken;
   if (!settings.tts?.enabled || !text) return;
   if (settings.tts.provider && !["none", "system"].includes(settings.tts.provider)) {
-    const result = await window.desktopPet.synthesizeSpeech(text);
-    if (!result?.ok || !result.audioDataUrl) return;
-    const audio = new Audio(result.audioDataUrl);
-    audio.play().catch(() => {});
+    try {
+      const result = await window.desktopPet.synthesizeSpeech(text);
+      if (token !== speechToken || !settings.tts.enabled || !result?.ok || !result.audioDataUrl) return;
+      activeAudio = new Audio(result.audioDataUrl);
+      await activeAudio.play();
+    } catch {
+      // Text replies remain available when the voice service or playback fails.
+    }
     return;
   }
   if (!("speechSynthesis" in window)) return;
@@ -385,14 +428,22 @@ async function speakText(text) {
 }
 
 function handlePetMessage(message = {}) {
+  if (message.clear) {
+    stopSpeech();
+    window.clearTimeout(bubbleTimer);
+    speechBubble.classList.remove("visible");
+    return;
+  }
   const text = typeof message === "string" ? message : message.text;
   const bubbleText = typeof message === "object" && message.bubbleText ? message.bubbleText : text;
   const action = typeof message === "object" ? message.action : "";
   showBubble(bubbleText);
   if (typeof message !== "object" || message.speak !== false) {
     speakText(text);
+  } else {
+    stopSpeech();
   }
-  if (!dragStart && action && character.states[action]) {
+  if (settings.expressionMode === "automatic" && !dragStart && action && character.states[action]) {
     playTemporary(action, Math.max(temporaryDuration(action), 1200));
   }
 }
@@ -411,21 +462,20 @@ function scheduleStartupGreeting() {
   didShowStartupGreeting = true;
   window.setTimeout(() => {
     showBubble(startupGreetingText(), 2800);
-    if (!dragStart && character.states.waving) {
+    if (settings.expressionMode === "automatic" && !dragStart && character.states.waving) {
       playTemporary("waving", 1200);
     }
   }, 650);
 }
 
-function loadSprite() {
+function loadSprite(spritePath) {
   return new Promise((resolve, reject) => {
     const nextImage = new Image();
     nextImage.addEventListener("load", () => {
-      spriteImage = nextImage;
-      resolve();
+      resolve(nextImage);
     }, { once: true });
     nextImage.addEventListener("error", reject, { once: true });
-    nextImage.src = character.spritePath;
+    nextImage.src = spritePath;
   });
 }
 
@@ -437,14 +487,17 @@ canvas.addEventListener("pointerenter", () => {
   if (state === "idle") playTemporary("waving", 900);
 });
 window.addEventListener("pointerup", endDrag);
-window.addEventListener("blur", () => {
+function cancelDrag() {
   if (!dragStart) return;
   dragStart = null;
+  didDrag = false;
   window.clearInterval(dragInterval);
   window.desktopPet.dragEnd();
   canvas.classList.remove("dragging");
   setState("idle");
-});
+}
+window.addEventListener("blur", cancelDrag);
+window.addEventListener("pointercancel", cancelDrag);
 
 window.addEventListener("contextmenu", (event) => {
   event.preventDefault();

@@ -152,6 +152,38 @@ let selectedVoiceName = "";
 let activeLanguage = "zh-CN";
 let characters = [];
 let selectedCharacterId = "default";
+let savedForm = [];
+let savedCharacterId = "default";
+
+function snapshotForm() {
+  return [...document.querySelectorAll("input, textarea, select")].map((element) => ({
+    element, value: element.value, checked: element.checked,
+  }));
+}
+
+function changedFields(baseline = savedForm) {
+  return baseline.filter(({ element, value, checked }) => element.value !== value || element.checked !== checked)
+    .map(({ element }) => ({ element, value: element.value, checked: element.checked }));
+}
+
+function restoreDraft(draft, characterId) {
+  for (const { element, value, checked } of draft) {
+    element.value = value;
+    element.checked = checked;
+  }
+  const language = draft.find(({ element }) => element === languageEl);
+  if (language) {
+    activeLanguage = i18n.resolveLanguage(language.value, config.resolvedLanguage || "zh-CN");
+    refreshLanguageOptions(language.value);
+    applyStaticTranslations();
+  }
+  if (characterId) {
+    selectedCharacterId = characterId;
+    renderCharacterCards();
+  }
+  updateRangeLabels();
+  updateProviderVisibility();
+}
 
 function text(key, variables = {}) {
   return i18n.t(key, variables, activeLanguage);
@@ -263,6 +295,7 @@ function applyLlmPreset(presetName) {
   if (!preset) return;
   baseUrlEl.value = preset.baseUrl;
   modelEl.value = preset.model;
+  apiKeyEl.value = "";
   config.assistant = {
     ...(config.assistant || {}),
     baseUrl: preset.baseUrl,
@@ -332,7 +365,8 @@ function renderCharacterCards() {
   }
 }
 
-function renderConfig() {
+function renderConfig(preserveDraft = false) {
+  const draft = preserveDraft ? snapshotForm() : [];
   const assistant = config.assistant || {};
   const tts = config.tts || {};
   const persona = config.persona || {};
@@ -399,8 +433,11 @@ function renderConfig() {
     "settings.affection.highToneDefault",
   );
 
-  updateRangeLabels();
-  updateProviderVisibility();
+  if (!preserveDraft) {
+    savedForm = snapshotForm();
+    savedCharacterId = selectedCharacterId;
+  }
+  restoreDraft(draft);
 
   const hasPersona = Boolean(
     persona.name
@@ -497,11 +534,20 @@ function readConfigForm(includeEmptyKey = false) {
 }
 
 async function saveConfig(includeEmptyKey = false) {
+  if (saveSettingsButton.disabled) return;
+  const submittedForm = snapshotForm();
+  const submittedCharacter = selectedCharacterId;
   saveSettingsButton.disabled = true;
   try {
-    config = await window.desktopPet.saveChatConfig(readConfigForm(includeEmptyKey));
+    const saved = await window.desktopPet.saveChatConfig(readConfigForm(includeEmptyKey));
+    const draft = changedFields(submittedForm);
+    const draftCharacter = selectedCharacterId !== submittedCharacter ? selectedCharacterId : null;
+    config = saved;
     renderConfig();
+    if (draft.length || draftCharacter) restoreDraft(draft, draftCharacter);
     saveStatusEl.textContent = text("settings.saved");
+  } catch {
+    saveStatusEl.textContent = text("settings.saveFailed");
   } finally {
     saveSettingsButton.disabled = false;
   }
@@ -558,12 +604,15 @@ async function testTts() {
 }
 
 function applyChatState(state = {}) {
+  const draft = changedFields();
+  const draftCharacter = selectedCharacterId !== savedCharacterId ? selectedCharacterId : null;
   config = state.config || config;
   config.language = state.language || config.language || "system";
   config.resolvedLanguage = state.resolvedLanguage || config.resolvedLanguage || "zh-CN";
   characters = Array.isArray(state.characters) ? state.characters : characters;
   selectedCharacterId = config.characterId || state.character?.id || selectedCharacterId;
   renderConfig();
+  if (draft.length || draftCharacter) restoreDraft(draft, draftCharacter);
   subtitleEl.textContent = text("chat.subtitle", { name: state.character?.name || text("app.name") });
 }
 
@@ -577,7 +626,10 @@ testTtsButton.addEventListener("click", testTts);
 for (const button of llmPresetButtons) {
   button.addEventListener("click", () => applyLlmPreset(button.dataset.preset));
 }
-baseUrlEl.addEventListener("input", updateLlmDraftStatus);
+baseUrlEl.addEventListener("input", () => {
+  apiKeyEl.value = "";
+  updateLlmDraftStatus();
+});
 modelEl.addEventListener("input", updateLlmDraftStatus);
 clearKeyButton.addEventListener("click", () => {
   apiKeyEl.value = "";
@@ -590,11 +642,15 @@ backToChatButton.addEventListener("click", () => {
 });
 rateEl.addEventListener("input", updateRangeLabels);
 pitchEl.addEventListener("input", updateRangeLabels);
-ttsProviderEl.addEventListener("change", updateProviderVisibility);
+ttsProviderEl.addEventListener("change", () => {
+  ttsApiKeyEl.value = "";
+  updateProviderVisibility();
+});
+ttsEndpointEl.addEventListener("input", () => { ttsApiKeyEl.value = ""; });
 languageEl.addEventListener("change", () => {
   config.language = languageEl.value;
   config.resolvedLanguage = i18n.resolveLanguage(languageEl.value, config.resolvedLanguage || "zh-CN");
-  renderConfig();
+  renderConfig(true);
 });
 affectionEnabledEl.addEventListener("change", () => {
   affectionStatusEl.textContent = affectionEnabledEl.checked

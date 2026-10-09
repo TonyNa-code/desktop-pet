@@ -92,6 +92,8 @@ let dragSnapshot = null;
 let restReminderTimer = null;
 let focusTimer = null;
 let chatHistory = [];
+let chatRequest = null;
+let chatRevision = 0;
 
 function isSafeAssetName(value) {
   return (
@@ -274,9 +276,28 @@ function encryptStoredApiKey(section) {
   const apiKey = section.apiKey;
   delete section.apiKey;
   delete section.apiKeyEnc;
-  if (apiKey && safeStorage.isEncryptionAvailable()) {
+  if (apiKey && canPersistApiKey()) {
     section.apiKeyEnc = safeStorage.encryptString(apiKey).toString("base64");
   }
+}
+
+function canPersistApiKey() {
+  return safeStorage.isEncryptionAvailable()
+    && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+}
+
+function mergeServiceSettings(current, patch = {}, urlField) {
+  const changes = { ...patch };
+  if (changes.apiKey === undefined) delete changes.apiKey;
+  const merged = { ...current, ...changes };
+  // Credentials belong to one endpoint, including its path and transport.
+  if (changes.apiKey === undefined && (
+    normalizeBaseUrl(merged[urlField]) !== normalizeBaseUrl(current[urlField])
+    || (urlField === "endpoint" && merged.provider !== current.provider)
+  )) {
+    merged.apiKey = "";
+  }
+  return merged;
 }
 
 function normalizeSettings(nextSettings) {
@@ -630,14 +651,8 @@ function updateSettings(patch) {
   const nextSettings = {
     ...settings,
     ...(patch || {}),
-    assistant: {
-      ...(settings.assistant || DEFAULT_SETTINGS.assistant),
-      ...((patch && patch.assistant) || {}),
-    },
-    tts: {
-      ...(settings.tts || DEFAULT_SETTINGS.tts),
-      ...((patch && patch.tts) || {}),
-    },
+    assistant: mergeServiceSettings(settings.assistant || DEFAULT_SETTINGS.assistant, patch?.assistant, "baseUrl"),
+    tts: mergeServiceSettings(settings.tts || DEFAULT_SETTINGS.tts, patch?.tts, "endpoint"),
     persona: {
       ...(settings.persona || DEFAULT_SETTINGS.persona),
       ...((patch && patch.persona) || {}),
@@ -647,7 +662,13 @@ function updateSettings(patch) {
       ...((patch && patch.affection) || {}),
     },
   };
-  settings = normalizeSettings(nextSettings);
+  const normalized = normalizeSettings(nextSettings);
+  if (normalized.characterId !== settings.characterId
+    || JSON.stringify(normalized.persona) !== JSON.stringify(settings.persona)
+    || JSON.stringify(normalized.assistant) !== JSON.stringify(settings.assistant)) {
+    cancelPendingChat();
+  }
+  settings = normalized;
   writeSettings();
   scheduleRestReminder();
   if (mainWindow) {
@@ -774,12 +795,12 @@ function publicChatConfig() {
     assistant: {
       ...assistant,
       hasApiKey: Boolean(apiKey),
-      canPersistApiKey: safeStorage.isEncryptionAvailable(),
+      canPersistApiKey: canPersistApiKey(),
     },
     tts: {
       ...tts,
       hasApiKey: Boolean(ttsApiKey),
-      canPersistApiKey: safeStorage.isEncryptionAvailable(),
+      canPersistApiKey: canPersistApiKey(),
     },
     persona: { ...(settings.persona || DEFAULT_SETTINGS.persona) },
     affection: { ...(settings.affection || DEFAULT_SETTINGS.affection) },
@@ -847,14 +868,8 @@ function settingsFromChatConfigPatch(patch = {}) {
     ...settings,
     ...(patch.language !== undefined ? { language: patch.language } : {}),
     ...(patch.characterId !== undefined ? { characterId: patch.characterId } : {}),
-    assistant: {
-      ...(settings.assistant || DEFAULT_SETTINGS.assistant),
-      ...assistantPatch,
-    },
-    tts: {
-      ...(settings.tts || DEFAULT_SETTINGS.tts),
-      ...ttsPatch,
-    },
+    assistant: mergeServiceSettings(settings.assistant || DEFAULT_SETTINGS.assistant, assistantPatch, "baseUrl"),
+    tts: mergeServiceSettings(settings.tts || DEFAULT_SETTINGS.tts, ttsPatch, "endpoint"),
     persona: {
       ...(settings.persona || DEFAULT_SETTINGS.persona),
       ...(patch.persona || {}),
@@ -867,11 +882,12 @@ function settingsFromChatConfigPatch(patch = {}) {
   });
 }
 
-function addChatMessage(role, content) {
+function addChatMessage(role, content, failed = false) {
   const message = {
     role,
     content,
     createdAt: Date.now(),
+    failed,
   };
   chatHistory.push(message);
   if (chatHistory.length > 80) {
@@ -896,6 +912,9 @@ function chatState() {
     resolvedLanguage: activeLanguage(),
     config: publicChatConfig(),
     history: publicChatHistory(),
+    revision: chatRevision,
+    busy: Boolean(chatRequest),
+    pending: chatRequest ? { content: chatRequest.text, createdAt: chatRequest.createdAt } : null,
     characters,
     character: (() => {
       const pack = getCharacterPack();
@@ -986,6 +1005,7 @@ function affectionInstruction() {
 function llmMessagesFor(userText) {
   const maxHistory = settings.assistant.maxHistory || DEFAULT_SETTINGS.assistant.maxHistory;
   const history = chatHistory
+    .filter((message) => !message.failed)
     .slice(-maxHistory)
     .map((message) => ({
       role: message.role,
@@ -1025,7 +1045,7 @@ function bubblePreview(text) {
   return cleanText.length > 180 ? `${cleanText.slice(0, 178)}...` : cleanText;
 }
 
-async function requestAssistantReply(userText) {
+async function requestAssistantReply(userText, controller = new AbortController()) {
   const assistant = settings.assistant || DEFAULT_SETTINGS.assistant;
   if (!assistant.baseUrl || !assistant.model) {
     return {
@@ -1035,7 +1055,6 @@ async function requestAssistantReply(userText) {
     };
   }
 
-  const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const headers = { "Content-Type": "application/json" };
@@ -1169,30 +1188,57 @@ async function testTtsConnection(_event, patch = {}) {
 async function sendChatMessage(_event, rawText) {
   const text = cleanUserMessage(rawText);
   if (!text) {
-    return { ok: false, error: "empty_message", history: publicChatHistory() };
+    return { ok: false, error: "empty_message", ...chatState() };
   }
+  if (chatRequest) return { ok: false, error: "chat_busy", ...chatState() };
+
+  const request = { text, createdAt: Date.now(), revision: chatRevision, controller: new AbortController() };
+  chatRequest = request;
+  broadcastChatState();
 
   sendPetMessage(t("pet.thinking"), pickAvailableAction(["review", "tsundereProud", "waving"]), { speak: false });
-  const result = await requestAssistantReply(text);
-  addChatMessage("user", text);
-  const assistantMessage = addChatMessage("assistant", result.reply);
-  sendPetMessage(result.reply, result.action, {
-    speak: true,
-    bubbleText: bubblePreview(result.reply),
-  });
-  if (result.ok) recordChatTimeProgress();
-  updateMoodFromInteraction("chat");
-  return {
-    ok: result.ok,
-    action: result.action,
-    message: assistantMessage,
-    history: publicChatHistory(),
-  };
+  try {
+    const result = await requestAssistantReply(text, request.controller);
+    if (chatRequest !== request) {
+      return { ok: false, cancelled: true, revision: request.revision };
+    }
+    addChatMessage("user", text, !result.ok);
+    const assistantMessage = addChatMessage("assistant", result.reply, !result.ok);
+    sendPetMessage(result.reply, result.action, {
+      speak: result.ok,
+      bubbleText: bubblePreview(result.reply),
+    });
+    if (result.ok) recordChatTimeProgress();
+    updateMoodFromInteraction("chat");
+    return { ok: result.ok, action: result.action, message: assistantMessage,
+      history: publicChatHistory(), revision: chatRevision };
+  } finally {
+    if (chatRequest === request) {
+      chatRequest = null;
+      broadcastChatState();
+    }
+  }
+}
+
+function broadcastChatState() {
+  for (const window of [chatWindow, quickChatWindow]) {
+    if (window && !window.isDestroyed()) window.webContents.send("chat-state-updated", chatState());
+  }
+}
+
+function cancelPendingChat() {
+  chatRevision += 1;
+  const request = chatRequest;
+  chatRequest = null;
+  request?.controller.abort();
+  sendPetMessage("", "", { clear: true, speak: false });
 }
 
 function clearChatHistory() {
+  cancelPendingChat();
   chatHistory = [];
-  return publicChatHistory();
+  broadcastChatState();
+  return chatState();
 }
 
 function ttsEndpoint(tts = settings.tts || DEFAULT_SETTINGS.tts) {
@@ -1243,7 +1289,7 @@ function audioContentType(response, provider, tts = settings.tts || DEFAULT_SETT
   return contentType || "audio/mpeg";
 }
 
-async function audioDataFromResponse(response, provider, tts = settings.tts || DEFAULT_SETTINGS.tts) {
+async function audioDataFromResponse(response, provider, tts = settings.tts || DEFAULT_SETTINGS.tts, signal) {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
     const data = await response.json();
@@ -1253,7 +1299,7 @@ async function audioDataFromResponse(response, provider, tts = settings.tts || D
       return audioValue;
     }
     if (typeof audioValue === "string" && /^https?:\/\//.test(audioValue)) {
-      const audioResponse = await fetch(audioValue);
+      const audioResponse = await fetch(audioValue, { signal });
       if (!audioResponse.ok) return null;
       const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
       return `data:${audioContentType(audioResponse, provider, tts)};base64,${audioBuffer.toString("base64")}`;
@@ -1326,7 +1372,7 @@ async function synthesizeSpeechWithSettings(rawText, nextSettings = settings) {
       const detail = await responseErrorText(response);
       return { ok: false, error: detail ? `tts_status_${response.status}: ${detail}` : `tts_status_${response.status}` };
     }
-    const audioDataUrl = await audioDataFromResponse(response, tts.provider, tts);
+    const audioDataUrl = await audioDataFromResponse(response, tts.provider, tts, controller.signal);
     if (!audioDataUrl) return { ok: false, error: "empty_audio" };
     return { ok: true, audioDataUrl };
   } catch (error) {

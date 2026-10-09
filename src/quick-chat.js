@@ -6,6 +6,9 @@ const statusEl = document.querySelector("#status");
 const i18n = window.DesktopPetI18n;
 
 let sending = false;
+let remoteBusy = false;
+let chatRevision = 0;
+let sendToken = 0;
 let activeLanguage = "zh-CN";
 
 function text(key, variables = {}) {
@@ -18,7 +21,7 @@ function applyTranslations() {
   input.placeholder = text("quick.placeholder");
   sendButton.textContent = text("quick.send");
   closeButton.setAttribute("aria-label", text("quick.close"));
-  if (!sending) setStatus(text("quick.idle"));
+  setStatus(sending || remoteBusy ? text("quick.waiting") : text("quick.idle"));
 }
 
 function setStatus(text) {
@@ -26,22 +29,28 @@ function setStatus(text) {
 }
 
 async function sendQuickMessage() {
-  if (sending) return;
+  if (sending || remoteBusy) return;
   const messageText = input.value.trim();
   if (!messageText) return;
   sending = true;
+  const token = ++sendToken;
   sendButton.disabled = true;
   input.value = "";
   setStatus(text("quick.waiting"));
   try {
     const result = await window.desktopPet.sendChatMessage(messageText);
-    setStatus(result.ok ? text("quick.replied") : text("quick.replyFailed"));
+    if (token !== sendToken || result.cancelled || result.revision < chatRevision) return;
+    remoteBusy = result.busy === true;
+    if (result.error === "chat_busy" && !input.value) input.value = messageText;
+    setStatus(remoteBusy ? text("quick.waiting") : result.ok ? text("quick.replied") : text("quick.replyFailed"));
   } catch {
-    setStatus(text("quick.sendFailed"));
+    if (token === sendToken) setStatus(text("quick.sendFailed"));
   } finally {
-    sending = false;
-    sendButton.disabled = false;
-    input.focus();
+    if (token === sendToken) {
+      sending = false;
+      sendButton.disabled = remoteBusy;
+      input.focus();
+    }
   }
 }
 
@@ -59,14 +68,22 @@ window.addEventListener("keydown", (event) => {
 input.focus();
 
 async function initialize() {
-  const state = await window.desktopPet.getChatState();
+  applyChatState(await window.desktopPet.getChatState());
+}
+
+function applyChatState(state = {}) {
+  if (Number.isFinite(state.revision) && state.revision < chatRevision) return;
+  if (Number.isFinite(state.revision) && state.revision > chatRevision) {
+    chatRevision = state.revision;
+    sendToken += 1;
+    sending = false;
+  }
+  remoteBusy = state.busy === true;
+  sendButton.disabled = sending || remoteBusy;
   activeLanguage = state.resolvedLanguage || state.config?.resolvedLanguage || activeLanguage;
   applyTranslations();
 }
 
-window.desktopPet.onChatStateUpdated((state = {}) => {
-  activeLanguage = state.resolvedLanguage || state.config?.resolvedLanguage || activeLanguage;
-  applyTranslations();
-});
+window.desktopPet.onChatStateUpdated(applyChatState);
 
 initialize().catch(applyTranslations);
