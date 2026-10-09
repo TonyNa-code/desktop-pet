@@ -13,10 +13,15 @@ const personaBackgroundEl = document.querySelector("#persona-background");
 const personaExtraRulesEl = document.querySelector("#persona-extra-rules");
 const baseUrlEl = document.querySelector("#base-url");
 const modelEl = document.querySelector("#model");
-const llmPresetButtons = [...document.querySelectorAll(".llm-preset")];
+const presetEl = document.querySelector("#llm-preset");
+const fetchModelsButton = document.querySelector("#fetch-models");
+const modelOptionsEl = document.querySelector("#model-options");
+const modelListStatusEl = document.querySelector("#model-list-status");
+let modelListGeneration = 0;
 const apiKeyEl = document.querySelector("#api-key");
 const keyStatusEl = document.querySelector("#key-status");
 const temperatureEl = document.querySelector("#temperature");
+const sendTemperatureEl = document.querySelector("#send-temperature");
 const maxHistoryEl = document.querySelector("#max-history");
 const testLlmButton = document.querySelector("#test-llm");
 const llmTestStatusEl = document.querySelector("#llm-test-status");
@@ -60,6 +65,71 @@ const saveStatusEl = document.querySelector("#save-status");
 const saveSettingsButton = document.querySelector("#save-settings");
 const clearKeyButton = document.querySelector("#clear-key");
 const backToChatButton = document.querySelector("#back-to-chat");
+const rememberHistoryEl = document.querySelector("#remember-history");
+const streamRepliesEl = document.querySelector("#stream-replies");
+const validation = window.DesktopPetValidation;
+let selectedTab = "character";
+let allowClose = false;
+let confirmingLeave = false;
+let importToken = null;
+let testAudio = null;
+let testGeneration = 0;
+const characterDrafts = new Map();
+
+function selectTab(name) {
+  selectedTab = name;
+  for (const page of document.querySelectorAll("[data-page]")) page.hidden = page.dataset.page !== name;
+  for (const tab of document.querySelectorAll("[data-tab]")) {
+    const selected = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.setAttribute("aria-controls", `page-${tab.dataset.tab}`);
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  document.querySelector("#affection-panel").hidden = name !== "character";
+}
+
+function validateForm(scope = "all") {
+  for (const element of document.querySelectorAll("[aria-invalid]")) element.removeAttribute("aria-invalid");
+  for (const element of document.querySelectorAll(".field-error")) element.remove();
+  const invalid = validation.validate(readConfigForm(), scope);
+  if (!invalid) return true;
+  const element = document.querySelector(`#${invalid.field}`);
+  selectTab(invalid.field.startsWith("tts-") ? "voice" : "chat");
+  const error = document.createElement("span");
+  error.className = "field-error";
+  error.id = `${invalid.field}-error`;
+  error.textContent = text(invalid.key, { text: "{text}" });
+  error.setAttribute("role", "alert");
+  element.setAttribute("aria-invalid", "true");
+  element.setAttribute("aria-describedby", error.id);
+  element.parentElement.append(error);
+  element.focus();
+  saveStatusEl.textContent = error.textContent;
+  return false;
+}
+
+async function mayLeave() {
+  if (saveSettingsButton.disabled || confirmingLeave) return false;
+  if (!changedFields().length) return true;
+  confirmingLeave = true;
+  try { return await window.desktopPet.confirmDiscard(); }
+  finally { confirmingLeave = false; }
+}
+
+async function importCharacter(kind) {
+  document.querySelector("#import-status").textContent = "";
+  try {
+    const result = await window.desktopPet.previewCharacterImport(kind);
+    if (result.cancelled) return;
+    if (result.error) throw new Error();
+    importToken = result.token;
+    document.querySelector("#import-image").src = result.preview;
+    document.querySelector("#import-image").alt = result.name;
+    document.querySelector("#import-name").textContent = result.name;
+    document.querySelector("#import-description").textContent = result.description;
+    document.querySelector("#import-preview").hidden = false;
+  } catch { document.querySelector("#import-status").textContent = text("settings.importFailed"); }
+}
 
 const DEFAULT_CUSTOM_BODY = "{\"text\":\"{{text}}\"}";
 const ZH_AFFECTION_DEFAULTS = {
@@ -68,28 +138,7 @@ const ZH_AFFECTION_DEFAULTS = {
   mediumTone: "自然友好，带一点熟悉感，可以适度关心对方。",
   highTone: "更亲近、更信任，语气可以更温柔主动，但不要失去角色边界。",
 };
-const LLM_PRESETS = {
-  ollama: {
-    baseUrl: "http://localhost:11434/v1",
-    model: "llama3.1",
-    needsKey: false,
-  },
-  lmstudio: {
-    baseUrl: "http://localhost:1234/v1",
-    model: "local-model",
-    needsKey: false,
-  },
-  deepseek: {
-    baseUrl: "https://api.deepseek.com",
-    model: "deepseek-v4-flash",
-    needsKey: true,
-  },
-  custom: {
-    baseUrl: "",
-    model: "",
-    needsKey: true,
-  },
-};
+const LLM_PRESETS = window.DesktopPetLlmPresets;
 const i18n = window.DesktopPetI18n;
 
 let config = {
@@ -156,20 +205,32 @@ let savedForm = [];
 let savedCharacterId = "default";
 
 function snapshotForm() {
-  return [...document.querySelectorAll("input, textarea, select")].map((element) => ({
-    element, value: element.value, checked: element.checked,
-  }));
+  return [...document.querySelectorAll("input, textarea, select")].map(snapshotField);
+}
+
+function credentialScope(element) {
+  if (element === apiKeyEl) return baseUrlEl.value.trim().replace(/\/+$/, "");
+  if (element === ttsApiKeyEl) return `${ttsProviderEl.value}:${ttsEndpointEl.value.trim().replace(/\/+$/, "")}`;
+  return undefined;
+}
+
+function snapshotField(element) {
+  return { element, value: element.value, checked: element.checked, credentialScope: credentialScope(element) };
 }
 
 function changedFields(baseline = savedForm) {
   return baseline.filter(({ element, value, checked }) => element.value !== value || element.checked !== checked)
-    .map(({ element }) => ({ element, value: element.value, checked: element.checked }));
+    .map(({ element }) => snapshotField(element));
 }
 
 function restoreDraft(draft, characterId) {
   for (const { element, value, checked } of draft) {
+    if (element === apiKeyEl || element === ttsApiKeyEl) continue;
     element.value = value;
     element.checked = checked;
+  }
+  for (const field of draft.filter(({ element }) => element === apiKeyEl || element === ttsApiKeyEl)) {
+    field.element.value = field.credentialScope === credentialScope(field.element) ? field.value : "";
   }
   const language = draft.find(({ element }) => element === languageEl);
   if (language) {
@@ -277,6 +338,10 @@ function updateProviderVisibility() {
   externalFields.hidden = !isExternal;
   gptSovitsFields.hidden = provider !== "gptsovits";
   customBodyRow.hidden = provider !== "custom";
+  document.querySelector("#rate-row").hidden = !["system", "gptsovits"].includes(provider);
+  document.querySelector("#pitch-row").hidden = !isSystem;
+  document.querySelector("#tts-test-row").hidden = provider === "none";
+  testTtsButton.disabled = provider === "none";
   ttsStatusEl.textContent = provider === "none" ? text("settings.tts.off") : text("settings.tts.afterSave");
 }
 
@@ -293,6 +358,7 @@ function updateLlmDraftStatus() {
 function applyLlmPreset(presetName) {
   const preset = LLM_PRESETS[presetName];
   if (!preset) return;
+  clearModelList();
   baseUrlEl.value = preset.baseUrl;
   modelEl.value = preset.model;
   apiKeyEl.value = "";
@@ -355,14 +421,18 @@ function renderCharacterCards() {
     content.append(name, description, meta);
     card.append(image, content);
 
-    card.addEventListener("click", () => {
-      selectedCharacterId = character.id;
-      config.characterId = character.id;
-      saveStatusEl.textContent = text("settings.character.changed");
-      renderCharacterCards();
+    card.addEventListener("click", async () => {
+      if (character.id === selectedCharacterId || !(await mayLeave())) return;
+      try {
+        characterDrafts.delete(savedCharacterId);
+        savedForm = [];
+        await window.desktopPet.saveChatConfig({ characterId: character.id });
+        applyChatState(await window.desktopPet.getChatState());
+      } catch { saveStatusEl.textContent = text("settings.saveFailed"); }
     });
     characterGridEl.append(card);
   }
+  document.querySelector("#remove-character").hidden = !activeCharacter.imported;
 }
 
 function renderConfig(preserveDraft = false) {
@@ -385,10 +455,15 @@ function renderConfig(preserveDraft = false) {
   personaExtraRulesEl.value = persona.extraRules || "";
 
   baseUrlEl.value = assistant.baseUrl || "";
+  presetEl.value = Object.keys(LLM_PRESETS).find((name) => LLM_PRESETS[name].baseUrl === baseUrlEl.value.replace(/\/$/, "")) || "custom";
+  clearModelList();
   modelEl.value = assistant.model || "";
   apiKeyEl.value = "";
   temperatureEl.value = Number(assistant.temperature ?? 0.7).toFixed(1);
+  sendTemperatureEl.checked = assistant.sendTemperature !== false;
   maxHistoryEl.value = String(assistant.maxHistory || 12);
+  streamRepliesEl.checked = assistant.stream !== false;
+  rememberHistoryEl.checked = config.rememberHistory === true;
 
   ttsProviderEl.value = tts.enabled ? (tts.provider || "system") : "none";
   selectedVoiceName = tts.voiceName || "";
@@ -479,8 +554,10 @@ function readConfigForm(includeEmptyKey = false) {
   const assistant = {
     baseUrl: baseUrlEl.value.trim(),
     model: modelEl.value.trim(),
-    temperature: Number(temperatureEl.value || 0.7),
+    temperature: Number(temperatureEl.value === "" ? 0.7 : temperatureEl.value),
+    sendTemperature: sendTemperatureEl.checked,
     maxHistory: Number(maxHistoryEl.value || 12),
+    stream: streamRepliesEl.checked,
   };
   const llmKey = apiKeyEl.value.trim();
   if (llmKey || includeEmptyKey) assistant.apiKey = llmKey;
@@ -530,11 +607,13 @@ function readConfigForm(includeEmptyKey = false) {
     affection: Number(affectionCurrentEl.value || 0),
   };
 
-  return { language: languageEl.value, characterId: selectedCharacterId, assistant, tts, persona, affection, profile };
+  return { language: languageEl.value, characterId: selectedCharacterId, assistant, tts, persona, affection, profile,
+    rememberHistory: rememberHistoryEl.checked };
 }
 
 async function saveConfig(includeEmptyKey = false) {
   if (saveSettingsButton.disabled) return;
+  if (!validateForm()) return false;
   const submittedForm = snapshotForm();
   const submittedCharacter = selectedCharacterId;
   saveSettingsButton.disabled = true;
@@ -546,8 +625,11 @@ async function saveConfig(includeEmptyKey = false) {
     renderConfig();
     if (draft.length || draftCharacter) restoreDraft(draft, draftCharacter);
     saveStatusEl.textContent = text("settings.saved");
+    characterDrafts.delete(savedCharacterId);
+    return true;
   } catch {
     saveStatusEl.textContent = text("settings.saveFailed");
+    return false;
   } finally {
     saveSettingsButton.disabled = false;
   }
@@ -566,12 +648,16 @@ function playSystemTtsTest() {
   if (voice) utterance.voice = voice;
   utterance.rate = Number(rateEl.value || 1);
   utterance.pitch = Number(pitchEl.value || 1);
+  const generation = testGeneration;
+  utterance.onstart = () => { if (generation === testGeneration) ttsTestStatusEl.textContent = text("tts.playbackSuccess"); };
+  utterance.onerror = () => { if (generation === testGeneration) ttsTestStatusEl.textContent = text("tts.playbackFailed"); };
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
   return true;
 }
 
 async function testLlm() {
+  if (!validateForm("llm")) return;
   testLlmButton.disabled = true;
   llmTestStatusEl.textContent = text("settings.llm.testing");
   try {
@@ -584,27 +670,79 @@ async function testLlm() {
   }
 }
 
+function clearModelList() {
+  modelListGeneration += 1;
+  modelOptionsEl.hidden = true;
+  modelOptionsEl.replaceChildren();
+  modelListStatusEl.textContent = "";
+  fetchModelsButton.disabled = false;
+}
+
+async function fetchModels() {
+  const patch = readConfigForm(false);
+  if (!validation.validUrl(patch.assistant.baseUrl)) {
+    modelListStatusEl.textContent = text("validation.url");
+    baseUrlEl.focus();
+    return;
+  }
+  const generation = ++modelListGeneration;
+  fetchModelsButton.disabled = true;
+  modelListStatusEl.textContent = text("settings.llm.modelsLoading");
+  try {
+    const result = await window.desktopPet.listAssistantModels(patch);
+    if (generation !== modelListGeneration) return;
+    modelOptionsEl.replaceChildren();
+    modelOptionsEl.hidden = true;
+    if (!result.ok || !result.models?.length) {
+      modelListStatusEl.textContent = text("settings.llm.modelsUnavailable");
+      return;
+    }
+    for (const id of ["", ...result.models]) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = id || text("settings.llm.chooseModel");
+      modelOptionsEl.append(option);
+    }
+    modelOptionsEl.value = result.models.includes(modelEl.value) ? modelEl.value : "";
+    modelOptionsEl.hidden = false;
+    modelListStatusEl.textContent = text("settings.llm.modelsLoaded", { count: result.models.length });
+  } catch {
+    if (generation === modelListGeneration) modelListStatusEl.textContent = text("settings.llm.modelsUnavailable");
+  } finally {
+    if (generation === modelListGeneration) fetchModelsButton.disabled = false;
+  }
+}
+
 async function testTts() {
+  if (!validateForm("tts")) return;
+  const generation = ++testGeneration;
+  if (testAudio) { testAudio.pause(); testAudio.src = ""; testAudio = null; }
   testTtsButton.disabled = true;
   ttsTestStatusEl.textContent = text("settings.tts.testing");
   try {
     const formConfig = readConfigForm(false);
     const result = await window.desktopPet.testTtsConnection(formConfig);
+    if (generation !== testGeneration) return;
     ttsTestStatusEl.textContent = result.message || (result.ok ? text("settings.tts.success") : text("settings.tts.failed"));
     if (result.audioDataUrl) {
-      new Audio(result.audioDataUrl).play().catch(() => {});
-    } else if (formConfig.tts.provider === "system" && result.ok && !playSystemTtsTest()) {
-      ttsTestStatusEl.textContent = text("settings.tts.systemUnavailable");
+      testAudio = new Audio(result.audioDataUrl);
+      testAudio.onerror = () => { if (generation === testGeneration) ttsTestStatusEl.textContent = text("tts.playbackFailed"); };
+      await testAudio.play();
+      if (generation === testGeneration) ttsTestStatusEl.textContent = text("tts.playbackSuccess");
+    } else if (formConfig.tts.provider === "system" && result.ok) {
+      if (!playSystemTtsTest()) ttsTestStatusEl.textContent = text("settings.tts.systemUnavailable");
     }
   } catch {
-    ttsTestStatusEl.textContent = text("settings.tts.testFailed");
+    if (generation === testGeneration) ttsTestStatusEl.textContent = text("tts.playbackFailed");
   } finally {
-    testTtsButton.disabled = false;
+    if (generation === testGeneration) testTtsButton.disabled = ttsProviderEl.value === "none";
   }
 }
 
 function applyChatState(state = {}) {
-  const draft = changedFields();
+  const switching = state.config?.characterId && state.config.characterId !== savedCharacterId;
+  if (switching) characterDrafts.set(savedCharacterId, changedFields());
+  const draft = switching ? characterDrafts.get(state.config.characterId) || [] : changedFields();
   const draftCharacter = selectedCharacterId !== savedCharacterId ? selectedCharacterId : null;
   config = state.config || config;
   config.language = state.language || config.language || "system";
@@ -623,9 +761,14 @@ async function initialize() {
 saveSettingsButton.addEventListener("click", () => saveConfig(false));
 testLlmButton.addEventListener("click", testLlm);
 testTtsButton.addEventListener("click", testTts);
-for (const button of llmPresetButtons) {
-  button.addEventListener("click", () => applyLlmPreset(button.dataset.preset));
-}
+presetEl.addEventListener("change", () => applyLlmPreset(presetEl.value));
+fetchModelsButton.addEventListener("click", fetchModels);
+modelOptionsEl.addEventListener("change", () => {
+  if (modelOptionsEl.value) modelEl.value = modelOptionsEl.value;
+  updateLlmDraftStatus();
+});
+baseUrlEl.addEventListener("input", clearModelList);
+apiKeyEl.addEventListener("input", clearModelList);
 baseUrlEl.addEventListener("input", () => {
   apiKeyEl.value = "";
   updateLlmDraftStatus();
@@ -636,13 +779,18 @@ clearKeyButton.addEventListener("click", () => {
   ttsApiKeyEl.value = "";
   saveConfig(true);
 });
-backToChatButton.addEventListener("click", () => {
+backToChatButton.addEventListener("click", async () => {
+  if (!(await mayLeave())) return;
+  allowClose = true;
   window.desktopPet.openChatWindow();
   window.close();
 });
 rateEl.addEventListener("input", updateRangeLabels);
 pitchEl.addEventListener("input", updateRangeLabels);
 ttsProviderEl.addEventListener("change", () => {
+  testGeneration += 1;
+  if (testAudio) { testAudio.pause(); testAudio.src = ""; testAudio = null; }
+  window.speechSynthesis?.cancel();
   ttsApiKeyEl.value = "";
   updateProviderVisibility();
 });
@@ -668,4 +816,42 @@ window.desktopPet.onChatStateUpdated(applyChatState);
 
 initialize().catch(() => {
   saveStatusEl.textContent = text("settings.startFailed");
+});
+
+for (const tab of document.querySelectorAll("[data-tab]")) {
+  tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+  tab.addEventListener("keydown", (event) => {
+    const tabs = [...document.querySelectorAll("[data-tab]")];
+    const index = tabs.indexOf(tab);
+    const next = event.key === "ArrowRight" ? (index + 1) % tabs.length
+      : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length
+        : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault(); selectTab(tabs[next].dataset.tab); tabs[next].focus();
+  });
+}
+selectTab(selectedTab);
+window.addEventListener("beforeunload", (event) => {
+  if (allowClose || (!changedFields().length && !saveSettingsButton.disabled)) return;
+  event.preventDefault(); event.returnValue = false;
+  mayLeave().then((confirmed) => { if (confirmed) { allowClose = true; window.close(); } }).catch(() => {});
+});
+document.querySelector("#import-folder").addEventListener("click", () => importCharacter("folder"));
+document.querySelector("#import-zip").addEventListener("click", () => importCharacter("zip"));
+document.querySelector("#cancel-import").addEventListener("click", () => { importToken = null; document.querySelector("#import-preview").hidden = true; });
+document.querySelector("#confirm-import").addEventListener("click", async () => {
+  try {
+    const result = await window.desktopPet.confirmCharacterImport(importToken);
+    if (!result.ok) throw new Error();
+    applyChatState(result);
+    document.querySelector("#import-preview").hidden = true;
+    document.querySelector("#import-status").textContent = text("settings.imported");
+  } catch { document.querySelector("#import-status").textContent = text("settings.importFailed"); }
+});
+document.querySelector("#remove-character").addEventListener("click", async () => {
+  if (!(await mayLeave())) return;
+  try {
+    const result = await window.desktopPet.removeCharacterImport(selectedCharacterId);
+    if (result.ok) { savedForm = []; applyChatState(result); }
+  } catch { saveStatusEl.textContent = text("settings.saveFailed"); }
 });

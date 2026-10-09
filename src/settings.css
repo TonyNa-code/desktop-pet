@@ -40,19 +40,20 @@ button:disabled {
 
 .settings-shell {
   display: grid;
-  grid-template-rows: auto;
-  gap: 14px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 0;
   height: 100vh;
   box-sizing: border-box;
-  padding: 16px;
-  overflow: auto;
+  padding: 0;
+  overflow: hidden;
 }
 
 .settings-header,
 .panel,
 .settings-footer {
-  border: 1px solid rgba(37, 40, 45, 0.1);
-  border-radius: 8px;
+  border: 0;
+  border-bottom: 1px solid rgba(37, 40, 45, 0.1);
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.88);
 }
 
@@ -212,10 +213,7 @@ textarea:focus {
 .sub-panel {
   display: grid;
   gap: 12px;
-  padding: 12px;
-  border: 1px solid rgba(37, 40, 45, 0.1);
-  border-radius: 8px;
-  background: #f7fafb;
+  padding: 0;
 }
 
 .sub-grid {
@@ -301,9 +299,6 @@ textarea:focus {
 }
 
 @media (max-width: 600px) {
-  .settings-shell {
-    grid-template-rows: auto;
-  }
 
   .split-row,
   .settings-footer,
@@ -316,7 +311,20 @@ textarea:focus {
   .settings-footer,
   .button-row,
   .preset-row {
-    align-items: stretch;
-    flex-direction: column;
+    flex-wrap: wrap;
   }
 }
+
+[hidden] { display: none !important; }
+.settings-content { overflow: auto; min-height: 0; }
+.settings-tabs { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid #dde1e3; background: #fff; }
+.settings-tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 0; }
+.settings-tabs button[aria-selected="true"] { border-color: #316e74; color: #23474b; background: #edf4f4; }
+.settings-footer { border-top: 1px solid #dde1e3; }
+button:focus-visible { outline: 2px solid #316e74; outline-offset: 2px; }
+[aria-invalid="true"] { border-color: #bd384d; }
+.field-error { color: #a82f43; font-size: 12px; margin-top: 4px; }
+#import-image { width: 100px; height: 120px; object-fit: contain; display: block; }
+#import-preview { border-left: 3px solid #316e74; padding: 12px; }
+#import-status { font-size: 12px; }
+.settings-footer div { flex-shrink: 0; }

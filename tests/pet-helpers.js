@@ -11,7 +11,8 @@ function loadPet(api = {}) {
   const audio = [];
   const events = {};
   let timerId = 0;
-  const bubble = { textContent: "", classList: { add() {}, remove() {} } };
+  const bubble = { textContent: "", events: {}, addEventListener(name, fn) { this.events[name] = fn; }, classList: { add() {}, remove() {} } };
+  const talk = { textContent: "", addEventListener() {} };
   const canvas = {
     width: 768, height: 832, classList: { add() {}, remove() {} },
     addEventListener(name, handler) { events[name] = handler; },
@@ -29,7 +30,7 @@ function loadPet(api = {}) {
   const window = {
     DesktopPetI18n: i18n,
     desktopPet: { getAppState: () => new Promise(() => {}), onAppStateUpdated() {}, onPetMessage() {},
-      recordInteraction() {}, dragStart() {}, dragEnd() {}, ...api },
+      recordInteraction() {}, dragStart() {}, dragEnd() {}, voicePlaybackError() {}, openChatWindow() {}, ...api },
     addEventListener(name, handler) { events[name] = handler; },
     setInterval(fn) { intervals.set(++timerId, fn); return timerId; },
     clearInterval(id) { intervals.delete(id); },
@@ -38,7 +39,7 @@ function loadPet(api = {}) {
   };
   const context = vm.createContext({
     window, Image, Audio, console, performance,
-    document: { querySelector: (selector) => selector === "#pet" ? canvas : bubble,
+    document: { querySelector: (selector) => selector === "#pet" ? canvas : selector === "#talk" ? talk : bubble,
       documentElement: { style: { setProperty() {} } } },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/renderer.js"), "utf8"), context);

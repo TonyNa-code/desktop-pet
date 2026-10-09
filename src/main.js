@@ -7,10 +7,18 @@ const {
   nativeImage,
   Notification,
   safeStorage,
+  dialog,
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const i18n = require("./i18n");
+const validation = require("./config-validation");
+const { readChatResponse } = require("./chat-response");
+const { expressionInstruction, parseCompanionReply } = require("./companion-response");
+const { companionBounds } = require("./companion-layout");
+const { modelsEndpoint, readModelList } = require("./model-list");
+const { readPack, installPack } = require("./character-import");
+const { pathToFileURL } = require("node:url");
 
 const BASE_SIZE = { width: 192, height: 208 };
 const BUBBLE_HEIGHT = 132;
@@ -31,7 +39,9 @@ const DEFAULT_SETTINGS = {
     model: "",
     apiKey: "",
     temperature: 0.7,
+    sendTemperature: true,
     maxHistory: 12,
+    stream: true,
   },
   tts: {
     enabled: false,
@@ -58,6 +68,7 @@ const DEFAULT_SETTINGS = {
     background: "",
     extraRules: "",
   },
+  rememberHistory: false,
   affection: {
     enabled: false,
     label: "好感",
@@ -94,6 +105,111 @@ let focusTimer = null;
 let chatHistory = [];
 let chatRequest = null;
 let chatRevision = 0;
+let characterSessions = {};
+let voiceError = false;
+let pendingImport = null;
+
+function importedCharactersDir() { return path.join(app.getPath("userData"), "characters"); }
+
+async function previewCharacterImport(event, kind) {
+  const owner = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(owner, kind === "folder"
+    ? { properties: ["openDirectory"] }
+    : { properties: ["openFile"], filters: [{ name: "ZIP", extensions: ["zip"] }] });
+  if (result.canceled || !result.filePaths.length) return { cancelled: true };
+  try {
+    const pack = readPack(result.filePaths[0], (bytes) => !nativeImage.createFromBuffer(bytes).isEmpty());
+    const token = require("node:crypto").randomUUID();
+    pendingImport = { pack, token, sender: event.sender.id, expires: Date.now() + 600000 };
+    return { token, name: pack.manifest.name, description: pack.manifest.description,
+      preview: `data:image/png;base64,${pack.files[pack.manifest.preview].toString("base64")}` };
+  } catch { return { error: "invalid_pack" }; }
+}
+
+function confirmCharacterImport(event, token) {
+  if (!pendingImport || pendingImport.token !== token || pendingImport.sender !== event.sender.id || pendingImport.expires < Date.now()) return { error: "expired" };
+  try {
+    installPack(pendingImport.pack, importedCharactersDir());
+    pendingImport = null;
+    return { ok: true, ...chatState() };
+  } catch { return { error: "import_failed" }; }
+}
+
+async function removeCharacterImport(event, id) {
+  if (!/^imported-[a-f0-9]{24}$/.test(id)) return { error: "invalid_id" };
+  const result = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    type: "question", message: t("settings.removeConfirm"),
+    buttons: [t("settings.importCancel"), t("settings.remove")], defaultId: 0, cancelId: 0,
+  });
+  if (result.response !== 1) return { cancelled: true };
+  if (settings.characterId === id) updateSettings({ characterId: DEFAULT_CHARACTER_ID });
+  fs.rmSync(path.join(importedCharactersDir(), id), { recursive: true, force: true });
+  delete characterSessions[id];
+  writeCharacterSessions();
+  return { ok: true, ...chatState() };
+}
+
+async function confirmDiscard(event) {
+  const result = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    type: "question", message: t("settings.leave"), buttons: [t("settings.stay"), t("settings.discard")],
+    defaultId: 0, cancelId: 0,
+  });
+  return result.response === 1;
+}
+
+function sessionSnapshot() {
+  return {
+    persona: { ...settings.persona }, affection: { ...settings.affection },
+    profile: { ...profile }, rememberHistory: settings.rememberHistory === true,
+    history: publicChatHistory(),
+  };
+}
+
+function writeCharacterSessions() {
+  characterSessions[settings.characterId] = sessionSnapshot();
+  const characters = Object.fromEntries(Object.entries(characterSessions).map(([id, value]) => [id, {
+    ...value, history: value.rememberHistory ? value.history : [],
+  }]));
+  writeJsonAtomically(characterStatePath(), { version: 2, settings: settingsForStorage(), characters });
+}
+
+function characterStatePath() { return path.join(app.getPath("userData"), "characters-state.json"); }
+
+function writeJsonAtomically(target, data) {
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
+  fs.writeFileSync(`${target}.tmp`, JSON.stringify(data, null, 2), { mode: 0o600 });
+  fs.renameSync(`${target}.tmp`, target);
+}
+
+function writeLegacyMirror(target, data) {
+  // The unified snapshot is authoritative; old versions may still read these mirrors.
+  try { writeJsonAtomically(target, data); } catch { /* Never turn a committed save into a failure. */ }
+}
+
+function readCharacterSessions() {
+  try {
+    const data = JSON.parse(fs.readFileSync(characterStatePath(), "utf8"));
+    if (![1, 2].includes(data.version) || !data.characters || typeof data.characters !== "object") throw new Error();
+    characterSessions = data.characters;
+  } catch { characterSessions = {}; }
+  if (Object.hasOwn(characterSessions, settings.characterId)) {
+    loadCharacterSession(characterSessions[settings.characterId]);
+  } else {
+    // Legacy global data belongs only to the character selected during migration.
+    characterSessions[settings.characterId] = sessionSnapshot();
+  }
+}
+
+function loadCharacterSession(value = {}) {
+  settings.persona = normalizePersonaSettings(value.persona);
+  settings.affection = normalizeAffectionSettings(value.affection);
+  settings.rememberHistory = value.rememberHistory === true;
+  profile = normalizeProfile({ ...DEFAULT_PROFILE, ...value.profile, lastChatAt: 0 });
+  chatHistory = Array.isArray(value.history) ? value.history.slice(-80).filter((item) =>
+    ["user", "assistant"].includes(item?.role) && typeof item.content === "string")
+    .map((item) => ({ role: item.role, content: item.content.slice(0, 100000),
+      createdAt: Number(item.createdAt) || 0, failed: item.failed === true })) : [];
+}
 
 function isSafeAssetName(value) {
   return (
@@ -161,14 +277,28 @@ function readCharacterPack(folderName) {
 }
 
 function listCharacterPacks() {
+  let imported = [];
+  try {
+    imported = fs.readdirSync(importedCharactersDir()).filter((id) => /^imported-[a-f0-9]{24}$/.test(id)).map((id) => {
+      try {
+        const root = path.join(importedCharactersDir(), id);
+        const raw = JSON.parse(fs.readFileSync(path.join(root, "character.json"), "utf8"));
+        const pack = normalizeCharacterPack(raw, id);
+        return { ...pack, id, imported: true, absoluteSpritePath: path.join(root, raw.sprite),
+          spritePath: pathToFileURL(path.join(root, raw.sprite)).href,
+          previewPath: pathToFileURL(path.join(root, raw.preview)).href };
+      } catch { return null; }
+    }).filter(Boolean);
+  } catch { /* No imported characters yet. */ }
   try {
     return fs.readdirSync(CHARACTERS_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => readCharacterPack(entry.name))
       .filter(Boolean)
+      .concat(imported)
       .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
-    return [];
+    return imported;
   }
 }
 
@@ -219,7 +349,12 @@ function profilePath() {
 
 function readSettings() {
   try {
-    const parsed = JSON.parse(fs.readFileSync(settingsPath(), "utf8"));
+    let parsed;
+    try {
+      const snapshot = JSON.parse(fs.readFileSync(characterStatePath(), "utf8"));
+      if (snapshot.version === 2 && snapshot.settings && typeof snapshot.settings === "object") parsed = snapshot.settings;
+    } catch { /* Read the legacy settings on first upgrade. */ }
+    if (!parsed) parsed = JSON.parse(fs.readFileSync(settingsPath(), "utf8"));
     parsed.assistant = {
       ...(parsed.assistant || {}),
       apiKey: readStoredApiKey(parsed.assistant || {}),
@@ -244,13 +379,13 @@ function readProfile() {
 }
 
 function writeSettings() {
-  fs.mkdirSync(app.getPath("userData"), { recursive: true });
-  fs.writeFileSync(settingsPath(), JSON.stringify(settingsForStorage(), null, 2));
+  writeCharacterSessions();
+  writeLegacyMirror(settingsPath(), settingsForStorage());
 }
 
 function writeProfile() {
-  fs.mkdirSync(app.getPath("userData"), { recursive: true });
-  fs.writeFileSync(profilePath(), JSON.stringify(profile, null, 2));
+  writeCharacterSessions();
+  writeLegacyMirror(profilePath(), profile);
 }
 
 function readStoredApiKey(rawAssistant) {
@@ -330,6 +465,7 @@ function normalizeSettings(nextSettings) {
     tts,
     persona,
     affection,
+    rememberHistory: nextSettings.rememberHistory === true,
   };
 }
 
@@ -344,11 +480,11 @@ function t(key, variables = {}, nextSettings = settings) {
 function normalizeAssistantSettings(rawAssistant = {}) {
   const raw = { ...DEFAULT_SETTINGS.assistant, ...(rawAssistant || {}) };
   const baseUrl = normalizeBaseUrl(raw.baseUrl);
-  const model = normalizeCompactText(raw.model, 100);
+  const model = normalizeCompactText(raw.model, 300);
   const apiKey = typeof raw.apiKey === "string" ? raw.apiKey.trim() : "";
   const temperature = clampNumber(raw.temperature, 0, 2, DEFAULT_SETTINGS.assistant.temperature);
   const maxHistory = Math.round(clampNumber(raw.maxHistory, 2, 30, DEFAULT_SETTINGS.assistant.maxHistory));
-  return { baseUrl, model, apiKey, temperature, maxHistory };
+  return { baseUrl, model, apiKey, temperature, sendTemperature: raw.sendTemperature !== false, maxHistory, stream: raw.stream !== false };
 }
 
 function normalizeTtsSettings(rawTts = {}) {
@@ -364,7 +500,7 @@ function normalizeTtsSettings(rawTts = {}) {
   const promptText = normalizeLongText(raw.promptText, 1000);
   const referenceAudioPath = normalizeLongText(raw.referenceAudioPath, 1000);
   const textSplitMethod = normalizeCompactText(raw.textSplitMethod, 32) || DEFAULT_SETTINGS.tts.textSplitMethod;
-  const mediaType = ["wav", "ogg", "aac", "raw", "mp3"].includes(raw.mediaType)
+  const mediaType = ["wav", "ogg", "aac", "mp3"].includes(raw.mediaType)
     ? raw.mediaType
     : DEFAULT_SETTINGS.tts.mediaType;
   const customBodyTemplate = normalizeLongText(
@@ -514,6 +650,7 @@ function applyWindowSize(keepCenter = true) {
 function createWindow() {
   readSettings();
   readProfile();
+  readCharacterSessions();
   recordLaunch();
   const size = displaySize();
   const primary = screen.getPrimaryDisplay().workArea;
@@ -541,6 +678,25 @@ function createWindow() {
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.once("ready-to-show", () => mainWindow.showInactive());
+  mainWindow.on("move", positionQuickChatWindow);
+  mainWindow.on("resize", positionQuickChatWindow);
+}
+
+function enableInputMenu(window) {
+  window.webContents.on("context-menu", (_event, params) => {
+    if (!params.isEditable) return;
+    Menu.buildFromTemplate([
+      { role: "undo" }, { role: "redo" }, { type: "separator" },
+      { role: "cut" }, { role: "copy" }, { role: "paste" },
+      { type: "separator" }, { role: "selectAll" },
+    ]).popup({ window });
+  });
+}
+
+function positionQuickChatWindow() {
+  if (!mainWindow || !quickChatWindow || quickChatWindow.isDestroyed()) return;
+  const pet = mainWindow.getBounds();
+  quickChatWindow.setBounds(companionBounds(pet, screen.getDisplayMatching(pet).workArea));
 }
 
 function createChatWindow() {
@@ -571,6 +727,7 @@ function createChatWindow() {
   });
 
   chatWindow.loadFile(path.join(__dirname, "chat.html"));
+  enableInputMenu(chatWindow);
   chatWindow.once("ready-to-show", () => chatWindow.show());
   chatWindow.on("closed", () => {
     chatWindow = null;
@@ -579,19 +736,15 @@ function createChatWindow() {
 
 function createQuickChatWindow() {
   if (quickChatWindow && !quickChatWindow.isDestroyed()) {
+    positionQuickChatWindow();
     quickChatWindow.show();
     quickChatWindow.focus();
     return;
   }
 
-  const primary = screen.getPrimaryDisplay().workArea;
+  const pet = mainWindow.getBounds();
   quickChatWindow = new BrowserWindow({
-    width: 380,
-    height: 86,
-    minWidth: 320,
-    minHeight: 76,
-    x: Math.round(primary.x + primary.width - 452),
-    y: Math.round(primary.y + primary.height - 186),
+    ...companionBounds(pet, screen.getDisplayMatching(pet).workArea),
     title: t("window.quickChatTitle"),
     frame: false,
     resizable: false,
@@ -608,6 +761,7 @@ function createQuickChatWindow() {
   });
 
   quickChatWindow.loadFile(path.join(__dirname, "quick-chat.html"));
+  enableInputMenu(quickChatWindow);
   quickChatWindow.once("ready-to-show", () => quickChatWindow.show());
   quickChatWindow.on("closed", () => {
     quickChatWindow = null;
@@ -622,8 +776,8 @@ function createCompanionSettingsWindow() {
   }
 
   companionSettingsWindow = new BrowserWindow({
-    width: 620,
-    height: 720,
+    width: 740,
+    height: 760,
     minWidth: 560,
     minHeight: 620,
     title: t("window.settingsTitle"),
@@ -638,6 +792,7 @@ function createCompanionSettingsWindow() {
   });
 
   companionSettingsWindow.loadFile(path.join(__dirname, "settings.html"));
+  enableInputMenu(companionSettingsWindow);
   companionSettingsWindow.once("ready-to-show", () => companionSettingsWindow.show());
   companionSettingsWindow.on("closed", () => {
     companionSettingsWindow = null;
@@ -653,6 +808,14 @@ function maybeShowInitialPersonaSettings() {
 }
 
 function updateSettings(patch) {
+  const previous = { settings, profile, history: chatHistory, sessions: { ...characterSessions } };
+  const targetId = getCharacterPack(patch?.characterId || settings.characterId)?.id;
+  if (targetId && targetId !== settings.characterId) {
+    cancelPendingChat();
+    characterSessions[settings.characterId] = sessionSnapshot();
+    settings = { ...settings, characterId: targetId };
+    loadCharacterSession(Object.hasOwn(characterSessions, targetId) ? characterSessions[targetId] : {});
+  }
   const nextSettings = {
     ...settings,
     ...(patch || {}),
@@ -674,7 +837,17 @@ function updateSettings(patch) {
     cancelPendingChat();
   }
   settings = normalized;
-  writeSettings();
+  try {
+    if (patch?.profile) applyProfileConfigPatch(patch.profile);
+    writeSettings();
+  } catch (error) {
+    settings = previous.settings;
+    profile = previous.profile;
+    chatHistory = previous.history;
+    characterSessions = previous.sessions;
+    broadcastChatState();
+    throw error;
+  }
   scheduleRestReminder();
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
@@ -809,6 +982,7 @@ function publicChatConfig() {
     },
     persona: { ...(settings.persona || DEFAULT_SETTINGS.persona) },
     affection: { ...(settings.affection || DEFAULT_SETTINGS.affection) },
+    rememberHistory: settings.rememberHistory === true,
     profile: {
       affection: profile.affection,
       energy: profile.energy,
@@ -823,6 +997,8 @@ function publicChatHistory() {
 }
 
 function applyChatConfigPatch(patch = {}) {
+  const invalid = validation.validate(patch, "all", false);
+  if (invalid) throw new Error(invalid.key);
   const assistantPatch = { ...(patch.assistant || {}) };
   if (assistantPatch.apiKey === undefined) {
     delete assistantPatch.apiKey;
@@ -834,20 +1010,22 @@ function applyChatConfigPatch(patch = {}) {
   if (ttsPatch.provider && ttsPatch.enabled === undefined) {
     ttsPatch.enabled = ttsPatch.provider !== "none";
   }
-  applyProfileConfigPatch(patch.profile || {});
   const settingsPatch = {
+    ...(patch.rememberHistory !== undefined ? { rememberHistory: patch.rememberHistory } : {}),
     ...(patch.language !== undefined ? { language: patch.language } : {}),
     ...(patch.characterId !== undefined ? { characterId: patch.characterId } : {}),
     assistant: assistantPatch,
     tts: ttsPatch,
-    persona: { ...(patch.persona || {}), setupDone: true },
+    ...(patch.persona ? { persona: { ...patch.persona, setupDone: true } } : {}),
     affection: { ...(patch.affection || {}) },
+    profile: { ...(patch.profile || {}) },
   };
   updateSettings(settingsPatch);
   return publicChatConfig();
 }
 
 function applyProfileConfigPatch(patch = {}) {
+  profile = { ...profile };
   let changed = false;
   if (patch.affection !== undefined) {
     profile.affection = clampNumber(patch.affection, 0, 100, profile.affection);
@@ -857,7 +1035,6 @@ function applyProfileConfigPatch(patch = {}) {
     profile.energy = clampNumber(patch.energy, 0, 100, profile.energy);
     changed = true;
   }
-  if (changed) writeProfile();
   return changed;
 }
 
@@ -911,6 +1088,7 @@ function chatState() {
     stateCount: Object.keys(pack.states || {}).length,
     automaticActionCount: pack.automaticActions.length,
     clickActionCount: pack.clickActions.length,
+    imported: pack.imported === true,
   }));
   return {
     language: settings.language,
@@ -919,7 +1097,8 @@ function chatState() {
     history: publicChatHistory(),
     revision: chatRevision,
     busy: Boolean(chatRequest),
-    pending: chatRequest ? { content: chatRequest.text, createdAt: chatRequest.createdAt } : null,
+    pending: chatRequest ? { content: chatRequest.text, createdAt: chatRequest.createdAt, reply: chatRequest.reply || "" } : null,
+    voiceError,
     characters,
     character: (() => {
       const pack = getCharacterPack();
@@ -934,11 +1113,11 @@ function chatState() {
 }
 
 function cleanUserMessage(text) {
-  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+  return String(text || "").trim().slice(0, 1200);
 }
 
 function compactAssistantReply(text) {
-  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 1600);
+  return String(text || "").trim();
 }
 
 function llmEndpoint(baseUrl) {
@@ -971,7 +1150,8 @@ function personaInstruction() {
   return [
     t("prompt.role", { name: characterName }),
     personaLines.length ? personaLines.join("\n") : t("prompt.characterStyle", { style: activeCharacterStyle() }),
-    affectionInstruction(),
+    settings.affection?.enabled ? affectionInstruction() : "",
+    expressionInstruction(getCharacterPack()?.states || { idle: {} }),
     t("prompt.defaultLanguage"),
     t("prompt.privacy"),
   ].join("\n");
@@ -1046,11 +1226,10 @@ function inferPetAction(userText, replyText) {
 }
 
 function bubblePreview(text) {
-  const cleanText = String(text || "").replace(/\s+/g, " ").trim();
-  return cleanText.length > 180 ? `${cleanText.slice(0, 178)}...` : cleanText;
+  return String(text || "").trim();
 }
 
-async function requestAssistantReply(userText, controller = new AbortController()) {
+async function requestAssistantReply(userText, controller = new AbortController(), onProgress) {
   const assistant = settings.assistant || DEFAULT_SETTINGS.assistant;
   if (!assistant.baseUrl || !assistant.model) {
     return {
@@ -1073,8 +1252,8 @@ async function requestAssistantReply(userText, controller = new AbortController(
       body: JSON.stringify({
         model: assistant.model,
         messages: llmMessagesFor(userText),
-        temperature: assistant.temperature,
-        stream: false,
+        ...(assistant.sendTemperature !== false ? { temperature: assistant.temperature } : {}),
+        stream: assistant.stream !== false,
       }),
     });
 
@@ -1090,8 +1269,13 @@ async function requestAssistantReply(userText, controller = new AbortController(
       };
     }
 
-    const data = await response.json();
-    const reply = compactAssistantReply(data?.choices?.[0]?.message?.content);
+    const states = getCharacterPack()?.states || { idle: {} };
+    const rawReply = await readChatResponse(response, (raw) => {
+      const parsed = parseCompanionReply(raw, states, true);
+      if (parsed.text) onProgress?.(parsed.text, parsed.action);
+    });
+    const parsed = parseCompanionReply(rawReply, states);
+    const reply = parsed.text;
     if (!reply) {
       return {
         reply: t("assistant.empty"),
@@ -1102,7 +1286,7 @@ async function requestAssistantReply(userText, controller = new AbortController(
 
     return {
       reply,
-      action: inferPetAction(userText, reply),
+      action: parsed.action || inferPetAction(userText, reply),
       ok: true,
     };
   } catch (error) {
@@ -1139,8 +1323,8 @@ async function testAssistantConnection(_event, patch = {}) {
           { role: "system", content: t("assistant.test.system", {}, candidate) },
           { role: "user", content: t("assistant.test.user", {}, candidate) },
         ],
-        temperature: 0,
-        stream: false,
+        ...(assistant.sendTemperature !== false ? { temperature: 0 } : {}),
+        stream: assistant.stream !== false,
       }),
     });
     if (!response.ok) {
@@ -1153,8 +1337,7 @@ async function testAssistantConnection(_event, patch = {}) {
         }, candidate),
       };
     }
-    const data = await response.json();
-    const preview = compactAssistantReply(data?.choices?.[0]?.message?.content).slice(0, 80);
+    const preview = (await readChatResponse(response)).slice(0, 80);
     if (!preview) return { ok: false, message: t("assistant.test.empty", {}, candidate) };
     return { ok: true, message: t("assistant.test.success", { preview }, candidate) };
   } catch (error) {
@@ -1165,6 +1348,22 @@ async function testAssistantConnection(_event, patch = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function listAssistantModels(_event, patch = {}) {
+  const candidate = settingsFromChatConfigPatch(patch);
+  const assistant = candidate.assistant;
+  if (!validation.validUrl(assistant.baseUrl)) return { ok: false, error: "url" };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const headers = {};
+    if (assistant.apiKey) headers.Authorization = `Bearer ${assistant.apiKey}`;
+    const response = await fetch(modelsEndpoint(assistant.baseUrl), { headers, signal: controller.signal, redirect: "error" });
+    if (!response.ok) return { ok: false, status: response.status };
+    return { ok: true, models: await readModelList(response) };
+  } catch { return { ok: false, error: "unavailable" }; }
+  finally { clearTimeout(timeout); }
 }
 
 async function testTtsConnection(_event, patch = {}) {
@@ -1199,11 +1398,22 @@ async function sendChatMessage(_event, rawText) {
 
   const request = { text, createdAt: Date.now(), revision: chatRevision, controller: new AbortController() };
   chatRequest = request;
+  voiceError = false;
   broadcastChatState();
 
-  sendPetMessage(t("pet.thinking"), pickAvailableAction(["review", "tsundereProud", "waving"]), { speak: false });
+  sendPetMessage(t("pet.thinking"), pickAvailableAction(["review", "tsundereProud", "waving"]), { speak: false, streaming: true });
   try {
-    const result = await requestAssistantReply(text, request.controller);
+    const result = await requestAssistantReply(text, request.controller, (reply, action) => {
+      if (chatRequest !== request) return;
+      request.reply = reply;
+      const now = Date.now();
+      if (!request.lastProgress || now - request.lastProgress >= 60) {
+        request.lastProgress = now;
+        broadcastChatState();
+        sendPetMessage(bubblePreview(reply), action && action !== request.action ? action : "", { speak: false, streaming: true });
+        if (action) request.action = action;
+      }
+    });
     if (chatRequest !== request) {
       return { ok: false, cancelled: true, revision: request.revision };
     }
@@ -1226,7 +1436,7 @@ async function sendChatMessage(_event, rawText) {
 }
 
 function broadcastChatState() {
-  for (const window of [chatWindow, quickChatWindow]) {
+  for (const window of [mainWindow, chatWindow, quickChatWindow]) {
     if (window && !window.isDestroyed()) window.webContents.send("chat-state-updated", chatState());
   }
 }
@@ -1241,7 +1451,23 @@ function cancelPendingChat() {
 
 function clearChatHistory() {
   cancelPendingChat();
+  const previous = chatHistory;
   chatHistory = [];
+  try { writeCharacterSessions(); }
+  catch (error) { chatHistory = previous; throw error; }
+  finally { broadcastChatState(); }
+  return chatState();
+}
+
+function stopChat() {
+  const request = chatRequest;
+  cancelPendingChat();
+  if (request) {
+    addChatMessage("user", request.text, true);
+    addChatMessage("assistant", request.reply || t("chat.stopped"), true);
+    try { writeCharacterSessions(); }
+    finally { broadcastChatState(); }
+  }
   broadcastChatState();
   return chatState();
 }
@@ -1254,12 +1480,13 @@ function ttsEndpoint(tts = settings.tts || DEFAULT_SETTINGS.tts) {
 }
 
 function interpolateTemplate(template, text) {
-  const escapedText = text
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, "\\\"")
-    .replace(/\n/g, "\\n")
-    .replace(/\r/g, "\\r");
-  return template.replaceAll("{{text}}", escapedText);
+  const replace = (value) => {
+    if (typeof value === "string") return value.replaceAll("{{text}}", text);
+    if (Array.isArray(value)) return value.map(replace);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replace(item)]));
+    return value;
+  };
+  return JSON.stringify(replace(JSON.parse(template)));
 }
 
 function gptSovitsPayload(text, tts = settings.tts || DEFAULT_SETTINGS.tts) {
@@ -1325,7 +1552,7 @@ async function responseErrorText(response) {
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       const data = await response.json();
-      const message = data.message || data.error || data.Exception || JSON.stringify(data);
+      const message = data.message || data.error?.message || data.error || data.Exception || JSON.stringify(data);
       return String(message).replace(/\s+/g, " ").slice(0, 160);
     }
     return (await response.text()).replace(/\s+/g, " ").slice(0, 160);
@@ -1369,7 +1596,14 @@ async function synthesizeSpeechWithSettings(rawText, nextSettings = settings) {
       }
     } else {
       requestOptions.headers = { ...headers, "Content-Type": "application/json" };
-      requestOptions.body = interpolateTemplate(tts.customBodyTemplate, text);
+      const payload = JSON.parse(interpolateTemplate(tts.customBodyTemplate, text));
+      if (tts.requestMode === "query") {
+        if (Object.values(payload).some((value) => value !== null && typeof value === "object")) throw new Error("invalid_query");
+        url = appendQuery(endpoint, payload);
+        requestOptions = { method: "GET", headers, signal: controller.signal };
+      } else {
+        requestOptions.body = JSON.stringify(payload);
+      }
     }
 
     const response = await fetch(url, requestOptions);
@@ -1569,6 +1803,7 @@ function setApplicationMenu() {
         { label: t("menu.quit"), accelerator: "CommandOrControl+Q", click: () => app.quit() },
       ],
     },
+    { role: "editMenu" },
   ]));
 }
 
@@ -1580,9 +1815,16 @@ app.whenReady().then(() => {
   ipcMain.handle("get-chat-state", () => chatState());
   ipcMain.handle("save-chat-config", (_event, patch) => applyChatConfigPatch(patch));
   ipcMain.handle("test-assistant-connection", testAssistantConnection);
+  ipcMain.handle("list-assistant-models", listAssistantModels);
   ipcMain.handle("test-tts-connection", testTtsConnection);
   ipcMain.handle("send-chat-message", sendChatMessage);
   ipcMain.handle("clear-chat-history", clearChatHistory);
+  ipcMain.handle("stop-chat", stopChat);
+  ipcMain.handle("confirm-discard", confirmDiscard);
+  ipcMain.handle("preview-character-import", previewCharacterImport);
+  ipcMain.handle("confirm-character-import", confirmCharacterImport);
+  ipcMain.handle("remove-character-import", removeCharacterImport);
+  ipcMain.on("voice-playback-error", () => { voiceError = true; broadcastChatState(); });
   ipcMain.handle("synthesize-speech", synthesizeSpeech);
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
   ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));

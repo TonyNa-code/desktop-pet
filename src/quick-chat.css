@@ -19,20 +19,24 @@ input {
 
 .quick-shell {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  grid-template-rows: 42px auto;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-rows: 24px 36px 16px;
+  gap: 5px 8px;
   box-sizing: border-box;
   width: 100vw;
   height: 100vh;
   padding: 10px;
   border: 1px solid rgba(37, 40, 45, 0.12);
-  border-radius: 14px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 12px 30px rgba(33, 38, 42, 0.18);
   backdrop-filter: blur(10px);
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
 }
+
+.quick-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.quick-header strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #316e74; font-weight: 600; }
+.quick-header button { padding: 0 3px; min-width: 24px; height: 24px; border: 0; background: transparent; font-size: 11px; }
 
 input,
 button {
@@ -70,7 +74,7 @@ button:disabled {
 }
 
 #close {
-  min-width: 34px;
+  min-width: 24px;
   font-size: 18px;
   line-height: 1;
 }
@@ -83,3 +87,5 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+[hidden] { display: none !important; }
+button:focus-visible { outline: 2px solid #316e74; outline-offset: 2px; }

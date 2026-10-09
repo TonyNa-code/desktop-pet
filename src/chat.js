@@ -7,6 +7,8 @@ const inputEl = document.querySelector("#message-input");
 const sendButton = document.querySelector("#send-message");
 const statusEl = document.querySelector("#status");
 const clearHistoryButton = document.querySelector("#clear-history");
+const stopButton = document.querySelector("#stop-message");
+const retryButton = document.querySelector("#retry-message");
 const i18n = window.DesktopPetI18n;
 
 let config = {
@@ -27,6 +29,7 @@ let pendingMessage = null;
 let chatRevision = 0;
 let sendToken = 0;
 let activeLanguage = "zh-CN";
+let voiceError = false;
 
 function text(key, variables = {}) {
   return i18n.t(key, variables, activeLanguage);
@@ -39,6 +42,9 @@ function applyStaticTranslations() {
   inputEl.placeholder = text("chat.placeholder");
   sendButton.textContent = text("chat.send");
   clearHistoryButton.textContent = text("chat.clear");
+  stopButton.textContent = text("chat.stop");
+  retryButton.textContent = text("chat.retry");
+  inputEl.setAttribute("aria-label", text("chat.placeholder"));
 }
 
 function setStatus(text) {
@@ -58,8 +64,10 @@ function isLlmReady() {
 }
 
 function statusText() {
+  if (voiceError) return text("tts.playbackFailed");
   if (!isLlmReady()) return text("chat.notConfigured");
-  return config.tts?.enabled ? text("chat.connectedTts") : text("chat.connectedNoTts");
+  if (history.at(-1)?.failed) return text("chat.replyFailed");
+  return text("chat.configured");
 }
 
 function renderHeader() {
@@ -70,6 +78,8 @@ function renderHeader() {
 }
 
 function renderHistory() {
+  const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
+  const previousScroll = messagesEl.scrollTop;
   messagesEl.textContent = "";
   if (!history.length && !pendingMessage) {
     const empty = document.createElement("div");
@@ -85,11 +95,12 @@ function renderHistory() {
 
   const visibleHistory = pendingMessage ? [...history,
     { ...pendingMessage, role: "user" },
-    { content: text("chat.thinking"), role: "assistant" },
+    { content: pendingMessage.reply || text("chat.thinking"), role: "assistant" },
   ] : history;
   for (const item of visibleHistory) {
     const row = document.createElement("article");
     row.className = `message ${item.role === "user" ? "user" : "assistant"}`;
+    row.classList.toggle("failed", item.failed === true);
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     bubble.textContent = item.content;
@@ -99,7 +110,8 @@ function renderHistory() {
     row.append(bubble, meta);
     messagesEl.append(row);
   }
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  messagesEl.scrollTop = nearBottom ? messagesEl.scrollHeight : previousScroll;
+  retryButton.hidden = !history.at(-1)?.failed || sending || remoteBusy;
 }
 
 function applyChatState(state = {}) {
@@ -111,11 +123,14 @@ function applyChatState(state = {}) {
   }
   remoteBusy = state.busy === true;
   pendingMessage = state.pending || null;
+  voiceError = state.voiceError === true;
   sendButton.disabled = sending || remoteBusy;
+  sendButton.hidden = sending || remoteBusy;
+  stopButton.hidden = !(sending || remoteBusy);
   config = state.config || config;
   activeLanguage = state.resolvedLanguage || config.resolvedLanguage || activeLanguage;
   history = Array.isArray(state.history) ? state.history : history;
-  characterName = state.character?.name || text("app.name");
+  characterName = config.persona?.name || state.character?.name || text("app.name");
   renderHeader();
   renderHistory();
 }
@@ -139,6 +154,8 @@ async function sendMessage(messageText) {
   sending = true;
   const token = ++sendToken;
   sendButton.disabled = true;
+  sendButton.hidden = true;
+  stopButton.hidden = false;
   inputEl.value = "";
   try {
     pendingMessage = { content: cleanText, createdAt: Date.now() };
@@ -162,6 +179,9 @@ async function sendMessage(messageText) {
     if (token === sendToken) {
       sending = false;
       sendButton.disabled = remoteBusy;
+      sendButton.hidden = remoteBusy;
+      stopButton.hidden = !remoteBusy;
+      retryButton.hidden = !history.at(-1)?.failed || remoteBusy;
       inputEl.focus();
     }
   }
@@ -188,12 +208,22 @@ inputEl.addEventListener("keydown", (event) => {
 });
 
 clearHistoryButton.addEventListener("click", async () => {
+  if (!window.confirm(text("chat.clearConfirm"))) return;
   try {
     applyChatState(await window.desktopPet.clearChatHistory());
     setStatus(text("chat.cleared"));
   } catch {
     setStatus(text("chat.clearFailed"));
   }
+});
+
+stopButton.addEventListener("click", async () => {
+  try { applyChatState(await window.desktopPet.stopChat()); setStatus(text("chat.stopped")); }
+  catch { setStatus(text("chat.sendFailed")); }
+});
+retryButton.addEventListener("click", () => {
+  const message = [...history].reverse().find((item) => item.role === "user");
+  if (message && history.at(-1)?.failed) sendMessage(message.content);
 });
 
 window.desktopPet.onChatStateUpdated(applyChatState);

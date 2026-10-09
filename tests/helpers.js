@@ -18,6 +18,7 @@ function loadMain(overrides = {}) {
           isEncryptionAvailable: () => true,
           getSelectedStorageBackend: () => "gnome_libsecret",
           encryptString: (value) => Buffer.from(value),
+          decryptString: (value) => value.toString(),
           ...overrides.safeStorage,
         },
         Menu: { buildFromTemplate: (menu) => menu, setApplicationMenu() {} },
@@ -26,7 +27,11 @@ function loadMain(overrides = {}) {
       if (id === "./i18n") return i18n;
       if (id === "node:fs") return {
         ...fs, mkdirSync() {}, writeFileSync: (file, data) => writes.set(file, data),
+        renameSync: (from, to) => { writes.set(to, writes.get(from)); writes.delete(from); },
+        readFileSync: (file, encoding) => writes.has(file) ? writes.get(file) : fs.readFileSync(file, encoding),
+        ...overrides.fs,
       };
+      if (id.startsWith("./")) return require(path.join(sourceDir, id));
       return require(id);
     },
     __dirname: sourceDir,
@@ -51,7 +56,7 @@ function loadRenderer(file, api = {}) {
   function element() {
     return {
       value: "", textContent: "", disabled: false, checked: false, dataset: {}, events: {},
-      children: [], append(...children) { this.children.push(...children); },
+      children: [], append(...children) { this.children.push(...children); }, replaceChildren(...children) { this.children = children; },
       focus() {}, setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} },
       querySelector() { return element(); },
       addEventListener(name, callback) { this.events[name] = callback; },
@@ -73,6 +78,8 @@ function loadRenderer(file, api = {}) {
     document, console, Intl, Date,
     window: {
       DesktopPetI18n: i18n,
+      DesktopPetValidation: require("../src/config-validation"),
+      DesktopPetLlmPresets: require("../src/llm-presets"),
       addEventListener() {}, close() {},
       desktopPet: { getChatState: () => new Promise(() => {}), onChatStateUpdated() {}, ...api },
     },

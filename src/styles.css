@@ -52,6 +52,8 @@ body {
   backdrop-filter: blur(8px);
   transform: translate(-50%, -8px) scale(0.98);
   opacity: 0;
+  visibility: hidden;
+  cursor: pointer;
   transition: opacity 160ms ease, transform 160ms ease;
   pointer-events: auto;
 }
@@ -71,5 +73,24 @@ body {
 
 #speech-bubble.visible {
   opacity: 1;
+  visibility: visible;
   transform: translate(-50%, 0) scale(1);
 }
+#speech-bubble:focus-visible { outline: 2px solid #316e74; outline-offset: -3px; }
+
+#talk {
+  position: absolute;
+  right: 10px;
+  bottom: 12px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(49, 110, 116, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #316e74;
+  font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  pointer-events: auto;
+  cursor: pointer;
+}
+#talk:hover { background: #edf6f5; }
+#talk:focus-visible { outline: 2px solid #316e74; outline-offset: 2px; }

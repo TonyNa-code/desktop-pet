@@ -8,10 +8,16 @@
   </head>
   <body>
     <form id="quick-form" class="quick-shell">
+      <header class="quick-header">
+        <strong id="character-name"></strong>
+        <button id="history" type="button">记录</button>
+        <button id="settings" type="button">设置</button>
+        <button id="close" type="button" aria-label="关闭">×</button>
+      </header>
       <input id="quick-input" type="text" maxlength="1200" placeholder="和桌宠说一句..." autofocus />
       <button id="send" type="submit">发送</button>
-      <button id="close" type="button" aria-label="关闭">×</button>
-      <span id="status">Enter 发送，Esc 关闭</span>
+      <button id="stop" type="button" hidden>停止</button>
+      <span id="status" role="status"></span>
     </form>
     <script src="./i18n.js"></script>
     <script src="./quick-chat.js"></script>

@@ -15,7 +15,14 @@
         </div>
         <button id="back-to-chat" type="button">返回聊天</button>
       </header>
-
+      <nav class="settings-tabs" role="tablist">
+        <button id="tab-general" type="button" role="tab" data-tab="general" data-i18n="settings.tabs.general">通用</button>
+        <button id="tab-character" type="button" role="tab" data-tab="character" data-i18n="settings.tabs.character">角色</button>
+        <button id="tab-chat" type="button" role="tab" data-tab="chat" data-i18n="settings.tabs.chat">聊天</button>
+        <button id="tab-voice" type="button" role="tab" data-tab="voice" data-i18n="settings.tabs.voice">语音</button>
+      </nav>
+      <div class="settings-content">
+      <div id="page-general" role="tabpanel" aria-labelledby="tab-general" data-page="general">
       <section class="panel">
         <div class="section-title">
           <h2 data-i18n="settings.general.title">通用</h2>
@@ -26,13 +33,26 @@
         </label>
         <p class="hint" data-i18n="language.hint">会影响菜单、窗口、提示气泡和默认对话语言。</p>
       </section>
-
+      </div>
+      <div id="page-character" role="tabpanel" aria-labelledby="tab-character" data-page="character" hidden>
       <section class="panel">
         <div class="section-title">
           <h2 data-i18n="settings.character.title">角色</h2>
           <span id="character-status">当前角色</span>
         </div>
         <div id="character-grid" class="character-grid"></div>
+        <div class="button-row">
+          <button id="import-folder" type="button" data-i18n="settings.importFolder">导入文件夹</button>
+          <button id="import-zip" type="button" data-i18n="settings.importZip">导入 ZIP</button>
+          <button id="remove-character" type="button" data-i18n="settings.remove" hidden>移除导入的角色</button>
+        </div>
+        <div id="import-preview" hidden>
+          <img id="import-image" alt="" />
+          <b id="import-name"></b><p id="import-description"></p>
+          <button id="confirm-import" type="button" data-i18n="settings.importConfirm">添加角色</button>
+          <button id="cancel-import" type="button" data-i18n="settings.importCancel">取消</button>
+        </div>
+        <p id="import-status" role="status"></p>
         <p class="hint" data-i18n="settings.character.hint">选择角色后保存设置，桌宠窗口会立即切换。</p>
       </section>
 
@@ -61,19 +81,31 @@
           <span data-i18n="settings.persona.extraRules">额外规则</span>
           <textarea id="persona-extra-rules" rows="3" placeholder="例如 不要主动报好感数值；不要输出长篇列表。" spellcheck="false"></textarea>
         </label>
+        <label class="check-row"><input id="remember-history" type="checkbox" /><span data-i18n="settings.remember">在本机保留此角色的聊天记录</span></label>
+        <p class="hint" data-i18n="settings.rememberHint"></p>
       </section>
-
+      </div>
+      <div id="page-chat" role="tabpanel" aria-labelledby="tab-chat" data-page="chat" hidden>
       <section class="panel">
         <div class="section-title">
           <h2 data-i18n="settings.llm.title">聊天模型</h2>
           <span id="llm-status">未配置</span>
         </div>
-        <div class="preset-row" aria-label="Chat model presets">
-          <button class="llm-preset" type="button" data-preset="ollama" data-i18n="settings.llm.presetOllama">Ollama</button>
-          <button class="llm-preset" type="button" data-preset="lmstudio" data-i18n="settings.llm.presetLmStudio">LM Studio</button>
-          <button class="llm-preset" type="button" data-preset="deepseek" data-i18n="settings.llm.presetDeepSeek">DeepSeek</button>
-          <button class="llm-preset" type="button" data-preset="custom" data-i18n="settings.llm.presetCustom">自定义接口</button>
-        </div>
+        <label>
+          <span data-i18n="settings.llm.service">服务</span>
+          <select id="llm-preset">
+            <option value="custom" data-i18n="settings.llm.presetCustom">自定义接口</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="qwen" data-i18n="settings.llm.qwen">通义千问（北京）</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="groq">Groq</option>
+            <option value="ollama" data-i18n="settings.llm.presetOllama">Ollama</option>
+            <option value="lmstudio" data-i18n="settings.llm.presetLmStudio">LM Studio</option>
+          </select>
+        </label>
         <p class="hint" data-i18n="settings.llm.presetHint">可以先点一个预设，再按你的服务实际情况修改模型名或 API key。</p>
         <label>
           <span>Base URL</span>
@@ -81,8 +113,13 @@
         </label>
         <label>
           <span data-i18n="settings.llm.model">模型名</span>
-          <input id="model" type="text" placeholder="例如 llama3.1、deepseek-v4-flash、gpt-4.1-mini" spellcheck="false" />
+          <input id="model" type="text" placeholder="例如 llama3.1、deepseek-flash、gpt-4.1-mini" spellcheck="false" />
         </label>
+        <div class="button-row">
+          <button id="fetch-models" type="button" data-i18n="settings.llm.fetchModels">获取模型列表</button>
+          <span id="model-list-status" class="hint" role="status"></span>
+        </div>
+        <select id="model-options" aria-label="Models" hidden></select>
         <label>
           <span>API key</span>
           <input id="api-key" type="password" placeholder="同一接口留空可保留密钥；更换接口需重新填写" spellcheck="false" />
@@ -103,8 +140,12 @@
           <button id="test-llm" type="button">测试聊天连接</button>
           <span id="llm-test-status" class="hint">保存前也可以测试当前填写的配置。</span>
         </div>
+        <label class="check-row"><input id="stream-replies" type="checkbox" checked /><span data-i18n="settings.stream">流式回复</span></label>
+        <label class="check-row"><input id="send-temperature" type="checkbox" checked /><span data-i18n="settings.llm.sendTemperature">发送温度参数</span></label>
+        <p class="hint" data-i18n="settings.llm.compatibility"></p>
       </section>
-
+      </div>
+      <div id="page-voice" role="tabpanel" aria-labelledby="tab-voice" data-page="voice" hidden>
       <section class="panel">
         <div class="section-title">
           <h2 data-i18n="settings.tts.title">语音朗读</h2>
@@ -148,7 +189,6 @@
                 <option value="wav">wav</option>
                 <option value="ogg">ogg</option>
                 <option value="aac">aac</option>
-                <option value="raw">raw</option>
                 <option value="mp3">mp3</option>
               </select>
             </label>
@@ -185,23 +225,23 @@
           </label>
         </div>
         <div class="split-row">
-          <label>
+          <label id="rate-row">
             <span><span id="rate-label">语速</span> <b id="rate-value">1.0</b></span>
             <input id="tts-rate" type="range" min="0.5" max="1.8" step="0.1" />
           </label>
-          <label>
+          <label id="pitch-row">
             <span><span id="pitch-label">音调</span> <b id="pitch-value">1.0</b></span>
             <input id="tts-pitch" type="range" min="0.5" max="1.8" step="0.1" />
           </label>
         </div>
         <p class="hint" data-i18n="settings.tts.defaultHint">默认关闭。选择系统语音、GPT-SoVITS 本地服务或自定义接口后，保存时会自动开启朗读。</p>
-        <div class="button-row">
+        <div class="button-row" id="tts-test-row">
           <button id="test-tts" type="button">测试语音</button>
           <span id="tts-test-status" class="hint">GPT-SoVITS 本地服务需要先在你的电脑上启动。</span>
         </div>
       </section>
-
-      <section class="panel">
+      </div>
+      <section class="panel" id="affection-panel" hidden>
         <div class="section-title">
           <h2 data-i18n="settings.affection.title">好感度</h2>
           <span id="affection-status">关闭</span>
@@ -256,9 +296,9 @@
         </label>
         <p id="affection-rule-status" class="hint"></p>
       </section>
-
+      </div>
       <footer class="settings-footer">
-        <span id="save-status">设置只保存在本机。</span>
+        <span id="save-status" role="status">设置只保存在本机。</span>
         <div>
           <button id="clear-key" type="button">清除 key</button>
           <button id="save-settings" type="button">保存设置</button>
@@ -266,6 +306,8 @@
       </footer>
     </main>
     <script src="./i18n.js"></script>
+    <script src="./config-validation.js"></script>
+    <script src="./llm-presets.js"></script>
     <script src="./settings.js"></script>
   </body>
 </html>

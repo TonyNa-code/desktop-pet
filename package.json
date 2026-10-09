@@ -17,7 +17,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && npm test && node scripts/validate-assets.js && node scripts/privacy-check.js",
+    "check": "node --check src/main.js && node --check src/i18n.js && node --check src/preload.js && node --check src/renderer.js && node --check src/chat.js && node --check src/quick-chat.js && node --check src/settings.js && node --check src/config-validation.js && node --check src/chat-response.js && node --check src/character-import.js && npm test && node scripts/validate-assets.js && node scripts/privacy-check.js",
     "test": "node --test tests/*.test.js",
     "test:smoke": "node tests/run-electron-smoke.cjs",
     "privacy:check": "node scripts/privacy-check.js",
@@ -81,5 +81,8 @@
       "icon": "build/icon.png",
       "category": "Utility"
     }
+  },
+  "dependencies": {
+    "fflate": "0.8.3"
   }
 }

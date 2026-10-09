@@ -21,10 +21,12 @@
       <form id="composer" class="composer">
         <textarea id="message-input" rows="2" maxlength="1200" placeholder="和她说点什么..." autofocus></textarea>
         <button id="send-message" type="submit">发送</button>
+        <button id="stop-message" type="button" hidden>停止</button>
       </form>
 
       <footer class="chat-footer">
-        <span id="status">未配置时会提示打开设置。</span>
+        <span id="status" role="status">未配置时会提示打开设置。</span>
+        <button id="retry-message" type="button" hidden>重试</button>
         <button id="clear-history" type="button">清空</button>
       </footer>
     </main>

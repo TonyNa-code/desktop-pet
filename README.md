@@ -123,15 +123,33 @@ The settings window opens automatically on first launch. `Persona` controls the 
 
 Chat model fields:
 
-- Presets: `Ollama`, `LM Studio`, `DeepSeek`, and `Custom API` fill common Base URL and model-name starting points.
-- DeepSeek preset: uses `https://api.deepseek.com` and `deepseek-v4-flash` as a current low-friction starting point; adjust the model name if your account uses another DeepSeek model.
+- Current-source presets: DeepSeek, OpenAI, Google Gemini, Qwen (Beijing), SiliconFlow, OpenRouter, Groq, Ollama, LM Studio, and Custom API. Each cloud service needs its own API key; a DeepSeek key cannot authenticate to another provider.
+- DeepSeek preset: uses `https://api.deepseek.com` and `deepseek-flash`; see the [DeepSeek API documentation](https://api-docs.deepseek.com/) for other model names.
 - `Base URL`: a `/chat/completions` compatible endpoint, such as `http://localhost:11434/v1` for a local model service or a compatible cloud API URL
 - `Model Name`: the model name supported by the service; local and cloud services both need it
 - `API key`: only needed when the service requires authentication; local services usually leave it empty
 
 `Test Chat Connection` sends a real request using the current form values and shows a short model response on success.
 
-API keys are stored only on this device. The app uses system secure storage when available; if secure persistence is not available, keys are kept only for the current run. Chat history is kept only in memory and is not written to the repository.
+In the current source, `Get models` retrieves a service's model list without sending a conversation. Choose a text chat model, or enter its exact name manually if the service does not offer a list. Turn off `Send temperature parameter` for models that reject that parameter. Compatibility means OpenAI **Chat Completions**, not native Anthropic Messages, Gemini GenerateContent, or OpenAI Responses. Claude models can be accessed through a compatible provider such as OpenRouter; this does not accept an Anthropic key directly.
+
+Provider references: [OpenAI](https://developers.openai.com/api/reference/chat-completions/overview), [Gemini compatibility](https://ai.google.dev/gemini-api/docs/openai), [Qwen regional endpoints](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope), [SiliconFlow](https://docs.siliconflow.cn/docs/userguide/quickstart), [OpenRouter](https://openrouter.ai/docs/quickstart), [Groq](https://console.groq.com/docs/openai). Availability, billing, and model access depend on the chosen provider. Adding a preset does not mean every model has been tested.
+
+API keys are stored only on this device. The app uses system secure storage when available; if secure persistence is not available, keys are kept only for the current run. Chat history stays in memory by default. Each character can optionally keep its latest 80 messages on this device; turning that option off deletes its saved history. History is not written to the repository.
+
+### Upcoming Source Features
+
+These features are available in the current source, not the 0.1.1 downloads:
+
+- The pet's Talk button opens an input box beside the character. It follows the pet as it moves, shows the character's name, and links to history and settings. Replies remain in the pet bubble, including the full text of longer responses.
+- Replies can select an expression from the current character pack. Unrecognized expressions fall back to the existing reply reactions. Click-only expression mode remains manual.
+- Standard editing shortcuts and input-field context menus support pasting API keys and messages.
+- Settings are grouped into General, Character, Chat and Voice, with a fixed save bar and unsaved-change confirmation.
+- Replies can stream as they arrive. Stop or retry a reply in Full Chat; Quick Input also supports stopping. Disable `Stream replies` for a service that only supports non-streaming requests.
+- Long replies keep their paragraphs. Pet bubbles stay longer for longer text, pause on hover, and open Full Chat when clicked.
+- Each character has its own persona, affinity and conversation. Model and voice service settings are shared. Existing settings migrate to the currently selected character.
+- Import a character folder or ZIP from the Character tab, review its preview, then add it. Packs are stored separately from the installed app. Removing an imported character deletes its local profile and saved history, not the original source files.
+- Custom TTS supports JSON POST and Query GET. GET templates must contain only scalar values. Voice tests report playback failures, not just HTTP success. Raw PCM is not supported; use WAV, MP3, OGG or AAC supported by the service and audio decoder.
 
 Voice is off by default. Supported voice backends:
 

@@ -1,5 +1,6 @@
 const canvas = document.querySelector("#pet");
 const speechBubble = document.querySelector("#speech-bubble");
+const talkButton = document.querySelector("#talk");
 const ctx = canvas.getContext("2d", { alpha: true });
 const i18n = window.DesktopPetI18n;
 const SINGLE_CLICK_DELAY = 280;
@@ -216,6 +217,8 @@ function applyAppState(nextAppState = {}) {
   };
   if (characterChanged || previousTts !== JSON.stringify(settings.tts)) stopSpeech();
   activeLanguage = settings.resolvedLanguage;
+  talkButton.textContent = text("pet.talk");
+  talkButton.title = text("quick.toCharacter", { name: character.name });
   document.documentElement.lang = activeLanguage;
   applyPetLayout();
 
@@ -367,14 +370,45 @@ function endDrag(event) {
   scheduleSingleClick();
 }
 
-function showBubble(text, duration = 2600) {
+let bubbleDeadline = 0;
+let bubbleRemaining = 0;
+let bubblePaused = false;
+let bubbleStreaming = false;
+
+function hideBubbleLater(duration) {
+  window.clearTimeout(bubbleTimer);
+  bubbleRemaining = duration;
+  bubbleDeadline = Date.now() + duration;
+  if (!bubblePaused && !bubbleStreaming) bubbleTimer = window.setTimeout(() => speechBubble.classList.remove("visible"), duration);
+}
+
+function showBubble(text, duration = Math.min(22000, Math.max(4500, String(text || "").length * 110))) {
   if (!speechBubble || !text) return;
   window.clearTimeout(bubbleTimer);
+  const continuing = speechBubble.textContent && String(text).startsWith(speechBubble.textContent);
+  const follow = continuing && speechBubble.scrollHeight - speechBubble.scrollTop - speechBubble.clientHeight < 24;
   speechBubble.textContent = text;
+  if (follow) speechBubble.scrollTop = speechBubble.scrollHeight;
+  else if (!continuing) speechBubble.scrollTop = 0;
   speechBubble.classList.add("visible");
-  bubbleTimer = window.setTimeout(() => {
-    speechBubble.classList.remove("visible");
-  }, duration);
+  speechBubble.title = window.DesktopPetI18n.t("pet.openChat", {}, activeLanguage);
+  hideBubbleLater(duration);
+}
+
+speechBubble.addEventListener("mouseenter", () => {
+  bubblePaused = true;
+  bubbleRemaining = Math.max(1500, bubbleDeadline - Date.now());
+  window.clearTimeout(bubbleTimer);
+});
+speechBubble.addEventListener("mouseleave", () => { bubblePaused = false; hideBubbleLater(bubbleRemaining); });
+speechBubble.addEventListener("focus", () => { bubblePaused = true; window.clearTimeout(bubbleTimer); });
+speechBubble.addEventListener("blur", () => { bubblePaused = false; hideBubbleLater(Math.max(3000, bubbleRemaining)); });
+speechBubble.addEventListener("click", () => window.desktopPet.openChatWindow());
+talkButton.addEventListener("click", () => window.desktopPet.openQuickChatWindow());
+
+function voicePlaybackFailed() {
+  window.desktopPet.voicePlaybackError();
+  showBubble(window.DesktopPetI18n.t("tts.playbackFailed", {}, activeLanguage));
 }
 
 function chooseTtsVoice() {
@@ -409,25 +443,29 @@ async function speakText(text) {
   if (settings.tts.provider && !["none", "system"].includes(settings.tts.provider)) {
     try {
       const result = await window.desktopPet.synthesizeSpeech(text);
-      if (token !== speechToken || !settings.tts.enabled || !result?.ok || !result.audioDataUrl) return;
+      if (token !== speechToken || !settings.tts.enabled) return;
+      if (!result?.ok || !result.audioDataUrl) { voicePlaybackFailed(); return; }
       activeAudio = new Audio(result.audioDataUrl);
+      activeAudio.onerror = () => { if (token === speechToken) voicePlaybackFailed(); };
       await activeAudio.play();
     } catch {
-      // Text replies remain available when the voice service or playback fails.
+      if (token === speechToken) voicePlaybackFailed();
     }
     return;
   }
-  if (!("speechSynthesis" in window)) return;
+  if (!("speechSynthesis" in window)) { voicePlaybackFailed(); return; }
   const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 500));
   const voice = chooseTtsVoice();
   if (voice) utterance.voice = voice;
   utterance.rate = Math.min(Math.max(Number(settings.tts.rate) || 1, 0.5), 1.8);
   utterance.pitch = Math.min(Math.max(Number(settings.tts.pitch) || 1, 0.5), 1.8);
+  utterance.onerror = () => { if (token === speechToken) voicePlaybackFailed(); };
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }
 
 function handlePetMessage(message = {}) {
+  bubbleStreaming = message.streaming === true;
   if (message.clear) {
     stopSpeech();
     window.clearTimeout(bubbleTimer);

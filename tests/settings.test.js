@@ -94,6 +94,15 @@ test("selecting a service preset clears an unsaved API key", () => {
   assert.equal(ui.nodes.get("#api-key").value, "");
 });
 
+test("DeepSeek preset uses the documented endpoint and model without retaining another service key", () => {
+  const ui = loadRenderer("settings.js");
+  ui.nodes.get("#api-key").value = "draft-key";
+  ui.run('applyLlmPreset("deepseek")');
+  assert.equal(ui.nodes.get("#base-url").value, "https://api.deepseek.com");
+  assert.equal(ui.nodes.get("#model").value, "deepseek-flash");
+  assert.equal(ui.nodes.get("#api-key").value, "");
+});
+
 test("background updates preserve dirty fields while refreshing untouched settings", () => {
   const ui = loadRenderer("settings.js");
   ui.run("renderConfig()");
@@ -127,4 +136,33 @@ test("save failures preserve inputs and show an error instead of rejecting", asy
   assert.equal(ui.nodes.get("#persona-name").value, "Draft");
   assert.equal(ui.nodes.get("#save-settings").disabled, false);
   assert.equal(ui.nodes.get("#save-status").textContent, ui.run('text("settings.saveFailed")'));
+});
+
+test("background endpoint changes never attach unsaved credentials to a different service", () => {
+  const ui = loadRenderer("settings.js");
+  ui.run('config.assistant.baseUrl="https://first.example/v1"; config.tts={...config.tts,enabled:true,provider:"custom",endpoint:"https://voice-first.example"}; renderConfig()');
+  ui.nodes.get("#api-key").value = "first-draft-key";
+  ui.nodes.get("#tts-api-key").value = "first-voice-key";
+  ui.run('applyChatState({config:{...config,assistant:{...config.assistant,baseUrl:"https://second.example/v1"},tts:{...config.tts,endpoint:"https://voice-second.example"}}})');
+  assert.equal(ui.nodes.get("#api-key").value, "");
+  assert.equal(ui.nodes.get("#tts-api-key").value, "");
+});
+
+test("cached character drafts cannot restore a key onto a newer shared endpoint", () => {
+  const ui = loadRenderer("settings.js");
+  ui.run('config.assistant.baseUrl="https://first.example/v1"; renderConfig()');
+  ui.nodes.get("#api-key").value = "first-draft-key";
+  ui.run('applyChatState({config:{...config,characterId:"luna"}})');
+  ui.run('applyChatState({config:{...config,characterId:"default",assistant:{...config.assistant,baseUrl:"https://second.example/v1"}}})');
+  assert.equal(ui.nodes.get("#api-key").value, "");
+});
+
+test("a complete endpoint and credential draft remains paired", () => {
+  const ui = loadRenderer("settings.js");
+  ui.run('config.assistant.baseUrl="https://first.example/v1"; renderConfig()');
+  ui.nodes.get("#base-url").value = "https://draft.example/v1";
+  ui.nodes.get("#api-key").value = "draft-key";
+  ui.run('applyChatState({config:{...config,assistant:{...config.assistant,baseUrl:"https://second.example/v1"}}})');
+  assert.equal(ui.nodes.get("#base-url").value, "https://draft.example/v1");
+  assert.equal(ui.nodes.get("#api-key").value, "draft-key");
 });
