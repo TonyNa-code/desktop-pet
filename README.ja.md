@@ -4,6 +4,8 @@
 
 **0.4.0 音声操作の更新：**ペットのそばで読み上げを停止・再生でき、音声の準備・再生状態も確認できます。長い返信の固定文字数での打ち切りを解消しました。[更新内容](docs/releases/v0.4.0.md)。
 
+ローカルの **Live2D プレビュー**は公開版とは別にテスト中です。[モデル導入・互換性・利用条件](docs/live2d.md#日本語)。
+
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)

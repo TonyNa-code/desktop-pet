@@ -65,7 +65,7 @@ test("a cancelled audio URL download also aborts without leaking the voice crede
   const requests = [];
   const app = voiceApp({ fetch: async (url, options) => {
     requests.push({ url, options });
-    if (requests.length === 1) return Response.json({ audio_url: "https://audio.example/file.wav" });
+    if (requests.length === 1) return Response.json({ audio_url: "https://voice.example/file.wav" });
     return new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))));
   } });
   app.run('settings.tts.apiKey = "test-only-key"; beginSpeech(petEvent,speechGeneration)');

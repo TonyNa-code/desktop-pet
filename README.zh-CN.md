@@ -4,6 +4,8 @@
 
 **0.4.0 语音互动更新：**桌宠旁即可停止朗读、重听回复，显示语音准备与播放状态，长回复不再固定截断。[更新说明](docs/releases/v0.4.0.md)。
 
+本地 **Live2D 预览功能**正在独立测试，尚未包含在正式发布版中。[模型导入、兼容性与许可说明](docs/live2d.md#简体中文)。
+
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)

@@ -104,6 +104,7 @@ function applyPetLayout() {
 
 function startAnimation() {
   window.clearInterval(animationTimer);
+  if (character.type === "live2d") return;
   const current = character.states[state] || character.states.idle;
   animationTimer = window.setInterval(() => {
     if (settings.expressionMode === "clickOnly" && !dragStart) {
@@ -123,13 +124,17 @@ function setState(nextState) {
   if (!character.states[nextState]) return;
   if (state === nextState) return;
   state = nextState;
+  if (character.type === "live2d") {
+    if (settings.expressionMode === "automatic") window.DesktopPetModel?.expression(settings.persona?.live2dExpressions?.[nextState] ?? -1);
+    return;
+  }
   frameIndex = 0;
   startAnimation();
 }
 
 function scheduleIdleBehavior() {
   window.clearTimeout(idleTimer);
-  if (settings.expressionMode !== "automatic" || conversationActive) return;
+  if (character.type === "live2d" || settings.expressionMode !== "automatic" || conversationActive) return;
 
   const delay = 22000 + Math.random() * 15000;
   idleTimer = window.setTimeout(() => {
@@ -219,6 +224,7 @@ function applyAppState(nextAppState = {}) {
     expressionMode: nextAppState.settings?.expressionMode === "clickOnly" ? "clickOnly" : "automatic",
     interactionResponses: nextAppState.settings?.interactionResponses !== false,
     userName: nextAppState.settings?.persona?.userName || "",
+    persona: nextAppState.settings?.persona || {},
     scale: Number(nextAppState.settings?.scale) || 1,
     alwaysOnTop: nextAppState.settings?.alwaysOnTop !== false,
     tts: {
@@ -247,6 +253,18 @@ function applyAppState(nextAppState = {}) {
   talkButton.title = text("quick.toCharacter", { name: character.name });
   document.documentElement.lang = activeLanguage;
   applyPetLayout();
+  window.DesktopPetModel?.apply(character, settings, conversationActive || speechActive);
+
+  if (character.type === "live2d") {
+    ++spriteLoadToken;
+    spriteImage = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    window.clearInterval(animationTimer);
+    window.clearTimeout(idleTimer);
+    if (characterChanged || modeChanged) resetAfterSettingsChange();
+    scheduleStartupGreeting();
+    return;
+  }
 
   if (characterChanged || !spriteImage) {
     const token = ++spriteLoadToken;
@@ -278,6 +296,11 @@ function resetAfterSettingsChange() {
   temporaryToken += 1;
   state = "idle";
   frameIndex = 0;
+  if (character.type === "live2d") {
+    window.DesktopPetModel?.expression(-1);
+    scheduleStartupGreeting();
+    return;
+  }
   if (settings.expressionMode === "clickOnly") {
     window.clearTimeout(idleTimer);
     const currentIndex = character.staticExpressions.findIndex((expression) => expression.state === "idle" && expression.frame === 0);
@@ -298,10 +321,11 @@ function respondToInteraction(kind) {
     : kind === "drop" ? ["tsundereProud", "happy", "waving", "idle"] : ["waving", "happy", "idle"];
   const action = choices.find((name) => character.states[name]);
   if (action) playTemporary(action, 1400);
+  if (character.type === "live2d") window.DesktopPetModel?.touch();
   // Touches stay local and quiet; they neither replace a visible reply nor queue up.
   if (bubbleVisible || performance.now() < interactionReadyAt) return;
   interactionReadyAt = performance.now() + 6000;
-  const style = character.id === "luna" ? "luna" : "default";
+  const style = settings.persona?.relationship === "partner" ? "partner" : character.id === "luna" ? "luna" : "default";
   const variant = interactionVariants[kind]++ % 2;
   const line = text(`pet.interaction.${style}.${kind}.${variant}`);
   showBubble(settings.userName ? text("pet.interaction.address", { name: settings.userName, line }) : line);
@@ -310,11 +334,13 @@ function respondToInteraction(kind) {
 function handleClick(kind = "greet") {
   window.desktopPet.recordInteraction("click");
   if (settings.expressionMode === "clickOnly") {
+    if (character.type === "live2d") { window.DesktopPetModel?.cycle(); return; }
     const [nextState, nextFrame] = nextStaticExpression();
     setStaticExpression(nextState, nextFrame);
   } else {
     if (conversationActive || speechActive) return;
     if (settings.interactionResponses) { respondToInteraction(kind); return; }
+    if (character.type === "live2d") { window.DesktopPetModel?.touch(); return; }
     const nextState = nextClickState();
     playTemporary(nextState);
   }
@@ -437,6 +463,7 @@ function dismissBubble() {
   bubbleVisible = false;
   conversationActive = false;
   conversationAction = "idle";
+  window.DesktopPetModel?.busy(speechActive);
   temporaryToken += 1;
   if (settings.expressionMode === "automatic" && !dragStart) setState("idle");
   scheduleIdleBehavior();
@@ -509,6 +536,8 @@ function chooseTtsVoice() {
 function stopSpeech(status = "idle") {
   speechToken += 1;
   speechActive = false;
+  window.DesktopPetModel?.stopMouth();
+  window.DesktopPetModel?.busy(conversationActive);
   if (speechId !== null) window.desktopPet.speechStateChanged({ id: speechId, status });
   speechId = null;
   window.clearTimeout(speechWatchdog);
@@ -527,6 +556,7 @@ async function speakText(text) {
   const token = speechToken;
   if (!settings.tts?.enabled || settings.tts.provider === "none" || !String(text || "").trim()) return;
   speechActive = true;
+  window.DesktopPetModel?.busy(true);
   window.clearTimeout(bubbleTimer);
   try {
     const id = await window.desktopPet.beginSpeech(speechGeneration);
@@ -555,6 +585,7 @@ async function speakText(text) {
           activeAudio.onended = playNext;
           activeAudio.onerror = () => finishSpeech(token, true);
           await activeAudio.play();
+          if (token === speechToken) window.DesktopPetModel?.attachAudio(activeAudio);
           if (token === speechToken) window.desktopPet.speechStateChanged({ id, status: "playing" });
         } else {
           if (!("speechSynthesis" in window)) { finishSpeech(token, true); return; }
@@ -603,6 +634,7 @@ function handlePetMessage(message = {}) {
   if (isChat) {
     if (!conversationActive || (!wasStreaming && bubbleStreaming)) conversationAction = "idle";
     conversationActive = true;
+    window.DesktopPetModel?.busy(true);
     if (action && character.states[action]) conversationAction = action;
     window.clearTimeout(idleTimer);
     temporaryToken += 1;
@@ -648,8 +680,16 @@ function loadSprite(spritePath) {
 }
 
 canvas.addEventListener("pointerdown", beginDrag);
+canvas.addEventListener("pointermove", (event) => {
+  if (dragStart || character.type !== "live2d") return;
+  const bounds = canvas.getBoundingClientRect();
+  window.DesktopPetModel?.gaze((event.clientX - bounds.left) / bounds.width * 0.7 - 0.35,
+    0.25 - (event.clientY - bounds.top) / bounds.height * 0.5);
+});
+canvas.addEventListener("pointerleave", () => window.DesktopPetModel?.gaze(0, 0));
 canvas.addEventListener("dblclick", handleDoubleClick);
 canvas.addEventListener("pointerenter", () => {
+  if (character.type === "live2d") return;
   if (settings.expressionMode !== "automatic" || conversationActive || dragStart || performance.now() < hoverReadyAt) return;
   hoverReadyAt = performance.now() + 10000;
   if (state === "idle") playTemporary("waving", 900);

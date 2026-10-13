@@ -10,10 +10,11 @@ test("voice URL download shares the synthesis timeout without forwarding credent
     fetch: async (url, options) => {
       requests.push({ url, options });
       if (requests.length === 1) {
-        return new Response(JSON.stringify({ audio_url: "https://audio.example/clip.wav" }), { headers: { "content-type": "application/json" } });
+        return new Response(JSON.stringify({ audio_url: "https://voice.example/clip.wav" }), { headers: { "content-type": "application/json" } });
       }
       assert.equal(options.signal, requests[0].options.signal);
       assert.equal(options.headers?.Authorization, undefined);
+      assert.equal(options.redirect, "error");
       const waiting = new Promise((_resolve, reject) => {
         options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
       });

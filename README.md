@@ -4,6 +4,8 @@
 
 **0.4.0 voice controls:** stop or replay a reply beside the pet, see when voice is preparing or playing, and hear longer replies without the previous fixed cutoff. [Release notes](docs/releases/v0.4.0.md).
 
+A local **Live2D preview** is being tested separately from the published release. [Model import, compatibility and licensing](docs/live2d.md).
+
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)

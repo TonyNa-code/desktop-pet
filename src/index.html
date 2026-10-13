@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; media-src data: blob:; frame-src pet-live2d:; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Desktop Pet</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -15,10 +16,13 @@
         <button id="voice-toggle" type="button"></button>
       </div>
     </div>
+    <div id="model-stage" hidden></div>
+    <button id="model-status" type="button" hidden></button>
     <canvas id="pet" width="768" height="832" aria-label="Desktop pet"></canvas>
     <button id="talk" type="button">对话</button>
     <script src="./i18n.js"></script>
     <script src="./speech-text.js"></script>
+    <script src="./live2d-bridge.js"></script>
     <script src="./renderer.js"></script>
     <script src="./voice-controls.js"></script>
   </body>

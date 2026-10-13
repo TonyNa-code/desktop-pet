@@ -1,8 +1,10 @@
 // Handles both JSON responses and OpenAI-compatible SSE without retrying a paid request.
+const { CHAT_LIMIT, readResponseJson } = require("./network-safety");
+
 async function readChatResponse(response, onProgress = () => {}) {
   const limit = 100000;
   if (!response.headers.get("content-type")?.includes("text/event-stream")) {
-    const data = await response.json();
+    const data = await readResponseJson(response);
     const reply = data?.choices?.[0]?.message?.content;
     if (typeof reply !== "string" || reply.length > limit) throw new Error("invalid_reply");
     return reply.trim();
@@ -13,6 +15,7 @@ async function readChatResponse(response, onProgress = () => {}) {
   let reply = "";
   let complete = false;
   let finished = false;
+  let bytesRead = 0;
   function event(block) {
     const data = block.split("\n").filter((line) => line.startsWith("data:"))
       .map((line) => line.slice(5).replace(/^ /, "")).join("\n");
@@ -32,6 +35,8 @@ async function readChatResponse(response, onProgress = () => {}) {
   try {
     while (!complete) {
       const { value, done } = await reader.read();
+      bytesRead += value?.byteLength || 0;
+      if (bytesRead > CHAT_LIMIT) throw new Error("response_too_large");
       buffer += decoder.decode(value, { stream: !done });
       // Keep a trailing CR until the next chunk, which may begin with LF.
       buffer = buffer.replace(/\r\n/g, "\n").replace(/\r(?!$)/g, "\n");

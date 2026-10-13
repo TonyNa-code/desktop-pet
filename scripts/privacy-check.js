@@ -25,6 +25,7 @@ const messagingArtifactPattern = [
 
 const denyPatterns = [
   { name: "macOS home path", pattern: /\/Users\/[^/\s]+/g },
+  { name: "Linux home path", pattern: /\/home\/[^/\s]+/g },
   { name: "macOS temporary path", pattern: /\/var\/folders\//g },
   { name: "Windows home path", pattern: /C:\\Users\\[^\\/\s]+/gi },
   { name: "messaging temporary artifact", pattern: new RegExp(`\\b(?:${messagingArtifactPattern})\\b`, "g") },
@@ -32,6 +33,8 @@ const denyPatterns = [
   { name: "environment secret assignment", pattern: /\b(?:OPENAI_API_KEY|DEEPSEEK_API_KEY|ANTHROPIC_API_KEY)\s*=/g },
   { name: "OpenAI-style secret", pattern: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
   { name: "bearer token", pattern: /\bBearer\s+[A-Za-z0-9._-]{24,}\b/g },
+  { name: "GitHub token", pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})\b/g },
+  { name: "private key block", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
 ];
 
 function listGitFiles() {
