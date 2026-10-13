@@ -4,7 +4,7 @@
 
 ## English
 
-This local experimental integration is not part of the published 0.4.0 release. Sprite characters remain available and keep their existing controls.
+This local experimental integration is not part of the 0.4.x releases. Sprite characters remain available and keep their existing controls.
 
 ### Import a Model
 
@@ -44,7 +44,7 @@ Chat and spoken text still go to the services you explicitly configure. Returned
 
 ## 简体中文
 
-这是尚未发布的本地实验功能，不在 GitHub 0.4.0 安装包中。原有图片桌宠和设置保持不变。
+这是尚未发布的本地实验功能，不在 GitHub 0.4.x 安装包中。原有图片桌宠和设置保持不变。
 
 1. 打开 **陪伴设置 > 角色 > 导入 Live2D**，选择模型的 `.model3.json`，或仅含一个模型的 ZIP。纹理、动作等文件需保留原有目录结构；单独的 `.moc3` 无法使用。
 2. 确认导入并切换到新角色。首次使用时点 **下载 Core 5.2**，保存官方 `live2dcubismcore.min.js`，再通过 **安装 Core** 选择这个文件。程序只接受已核验的官方文件，运行库保存在本机数据目录。
@@ -62,7 +62,7 @@ Chat and spoken text still go to the services you explicitly configure. Returned
 
 ## 日本語
 
-ローカルで試せる未公開機能です。公開版 0.4.0 には含まれていません。既存のスプライトキャラクターはそのまま使えます。
+ローカルで試せる未公開機能です。公開版 0.4.x には含まれていません。既存のスプライトキャラクターはそのまま使えます。
 
 1. **付き添い設定 > キャラクター > Live2D を追加** から `.model3.json`、またはモデルが一つだけ入った ZIP を選びます。関連ファイルのフォルダー構成を保ってください。`.moc3` 単体では使えません。
 2. 追加したキャラクターを選択します。初回は **Core 5.2 をダウンロード** から公式の `live2dcubismcore.min.js` を保存し、**Core を導入** で選びます。確認済みの公式ファイルのみ受け付けます。
