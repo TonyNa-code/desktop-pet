@@ -415,6 +415,10 @@ async function run() {
   });
   await until(() => evaluate(pet, () => bubbleVisible && bubbleStreaming && speechBubble.textContent === "First paragraph"), "dismissable stream");
   await evaluate(pet, () => document.querySelector("#bubble-dismiss").click());
+  await evaluate(pet, () => {
+    handlePetMessage({ text: "Local reminder during hidden generation", speak: false });
+    document.querySelector("#bubble-dismiss").click();
+  });
   streamResponse.write('data: {"choices":[{"delta":{"content":"Still saved in history"},"finish_reason":"stop"}]}\n\n');
   streamResponse.end("data: [DONE]\n\n");
   await until(() => evaluate(chat, () => !document.querySelector("#send-message").disabled), "dismissed stream completed");

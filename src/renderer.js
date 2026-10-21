@@ -539,7 +539,7 @@ speechCard.addEventListener("keydown", (event) => {
 });
 function closeBubble() {
   // Later chunks still enter chat history, but must not reopen a dismissed reply.
-  dismissedPresentationId = presentationId;
+  if (presentationId !== null) dismissedPresentationId = presentationId;
   queuedNotice = null;
   bubbleStreaming = false;
   stopSpeech();

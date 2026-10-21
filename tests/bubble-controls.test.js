@@ -33,6 +33,9 @@ test("closing a stream suppresses later chunks and speech without hiding the nex
   assert.equal(pet.card.hidden, true);
   assert.equal(pet.run("queuedNotice"), null);
   assert.equal(stops, 1);
+  pet.run('handlePetMessage({text:"Local reminder",speak:false})');
+  assert.equal(pet.card.hidden, false);
+  pet.nodes.get("#bubble-dismiss").events.click();
   for (const streaming of [true, false]) {
     pet.run(`handlePetMessage({source:"chat",presentationId:10,text:"Finished",streaming:${streaming}})`);
     assert.equal(pet.card.hidden, true);
