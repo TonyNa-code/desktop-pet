@@ -47,7 +47,7 @@ test("keyboard focus keeps a bubble open even after the pointer leaves; Escape c
   const pet = loadPet();
   pet.run('showBubble("Read me")');
   pet.card.events.mouseenter();
-  pet.card.events.focusin();
+  pet.card.events.focusin({ target: { matches: () => true } });
   pet.card.events.mouseleave();
   assert.equal(pet.timeouts.has(pet.run("bubbleTimer")), false);
   pet.card.events.focusout({ relatedTarget: null });
@@ -55,6 +55,21 @@ test("keyboard focus keeps a bubble open even after the pointer leaves; Escape c
   let prevented = false;
   pet.card.events.keydown({ key: "Escape", preventDefault() { prevented = true; } });
   assert.equal(prevented, true);
+  assert.equal(pet.card.hidden, true);
+});
+
+test("mouse focus does not keep an unpinned reply open after the pointer leaves", () => {
+  const pet = loadPet();
+  pet.run('handlePetMessage({source:"chat",presentationId:1,text:"Reply",speak:false,pinned:true})');
+  pet.card.events.mouseenter();
+  pet.card.events.focusin({ target: { matches: () => true } });
+  pet.card.events.pointerdown();
+  pet.card.events.focusin({ target: { matches: () => false } });
+  pet.nodes.get("#bubble-pin").events.click();
+  pet.card.events.mouseleave();
+  assert.equal(pet.run("bubblePinned || bubbleFocused"), false);
+  assert.equal(pet.timeouts.has(pet.run("bubbleTimer")), true);
+  pet.fireTimer(pet.run("bubbleTimer"));
   assert.equal(pet.card.hidden, true);
 });
 

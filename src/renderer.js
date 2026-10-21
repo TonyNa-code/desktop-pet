@@ -524,10 +524,15 @@ function pauseBubble() {
 
 speechCard.addEventListener("mouseenter", () => { bubbleHovered = true; pauseBubble(); });
 speechCard.addEventListener("mouseleave", () => { bubbleHovered = false; pauseBubble(); });
-speechCard.addEventListener("focusin", () => { bubbleFocused = true; pauseBubble(); });
-speechCard.addEventListener("focusout", (event) => { bubbleFocused = speechCard.contains(event.relatedTarget); pauseBubble(); });
+speechCard.addEventListener("pointerdown", () => { bubbleFocused = false; pauseBubble(); });
+speechCard.addEventListener("focusin", (event) => { bubbleFocused = event.target.matches(":focus-visible"); pauseBubble(); });
+speechCard.addEventListener("focusout", (event) => { bubbleFocused = bubbleFocused && speechCard.contains(event.relatedTarget); pauseBubble(); });
 speechCard.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
+  if (event.key !== "Escape") {
+    bubbleFocused = true;
+    pauseBubble();
+    return;
+  }
   event.preventDefault();
   closeBubble();
   talkButton.focus();

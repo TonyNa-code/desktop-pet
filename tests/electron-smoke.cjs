@@ -374,6 +374,22 @@ async function run() {
     }
   }
   await evaluate(pet, () => window.desktopPet.setSettings({ scale: 1.5 }));
+  await until(async () => pet.getBounds().width === 320 && await evaluate(pet, () => settings.scale === 1.5), "pet size before mouse input");
+  pet.focus();
+  const pinPoint = await evaluate(pet, () => {
+    const bounds = document.querySelector("#bubble-pin").getBoundingClientRect();
+    return { x: Math.round(bounds.left + bounds.width / 2), y: Math.round(bounds.top + bounds.height / 2) };
+  });
+  pet.webContents.sendInputEvent({ type: "mouseMove", ...pinPoint });
+  pet.webContents.sendInputEvent({ type: "mouseDown", button: "left", clickCount: 1, ...pinPoint });
+  pet.webContents.sendInputEvent({ type: "mouseUp", button: "left", clickCount: 1, ...pinPoint });
+  await until(() => evaluate(pet, () => !bubblePinned && !bubbleFocused), "mouse unpins without a keyboard hold");
+  pet.webContents.sendInputEvent({ type: "mouseMove", x: 2, y: 200 });
+  await until(() => evaluate(pet, () => !bubblePaused), "pointer leaves unpinned bubble");
+  await evaluate(pet, () => { queuedNotice = null; hideBubbleLater(30); });
+  await until(() => evaluate(pet, () => !bubbleVisible), "unpinned bubble hides after mouse use");
+  await evaluate(pet, () => window.desktopPet.showLastReply());
+  await until(() => evaluate(pet, () => bubbleVisible && bubblePinned), "restore bubble after mouse unpin");
   await evaluate(pet, () => document.querySelector("#bubble-history").click());
   await until(() => chat.isVisible(), "bubble opens history");
   await evaluate(pet, () => document.querySelector("#bubble-reply").click());
