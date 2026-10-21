@@ -47,7 +47,7 @@ const server = http.createServer((req, res) => {
     const payload = JSON.parse(body);
     requests.push(payload);
     const last = payload.messages.at(-1).content;
-    if (last === "Streaming message" || last === "Stopped stream") {
+    if (last === "Streaming message" || last === "Stopped stream" || last === "Dismissed stream") {
       assert.equal(payload.stream, true);
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.write('data: {"choices":[{"delta":{"content":"[expression:wa"}}]}\n\n');
@@ -173,7 +173,7 @@ async function run() {
   await until(() => evaluate(settings, () => !document.querySelector("#model-options").hidden), "model discovery");
   assert.equal(await evaluate(settings, () => document.querySelector("#model-options").options.length), 3);
   await evaluate(pet, () => window.desktopPet.setSettings({ scale: 1.5 }));
-  await until(() => pet.getBounds().width === 320 && pet.getBounds().height === 444, "pet size");
+  await until(() => pet.getBounds().width === 320 && pet.getBounds().height === 472, "pet size");
   const bounds = pet.getBounds();
   const workArea = screen.getDisplayMatching(bounds).workArea;
   assert.ok(bounds.y >= workArea.y && bounds.y + bounds.height <= workArea.y + workArea.height);
@@ -340,10 +340,70 @@ async function run() {
   assert.equal(await evaluate(chat, () => document.querySelector("#latest-message").hidden), true);
   assert.equal((await evaluate(chat, () => window.desktopPet.getChatState())).history.at(-1).content, `First paragraph\n\n${longReply.trim()}`);
   assert.equal(await evaluate(pet, () => document.querySelector("#speech-bubble").textContent), `First paragraph\n\n${longReply.trim()}`);
-  await evaluate(pet, () => document.querySelector("#speech-bubble").dispatchEvent(new MouseEvent("mouseenter")));
+  await evaluate(pet, () => document.querySelector("#speech-card").dispatchEvent(new MouseEvent("mouseenter")));
   await delay(3000);
   assert.equal(await evaluate(pet, () => document.querySelector("#speech-bubble").classList.contains("visible")), true);
-  await evaluate(pet, () => document.querySelector("#speech-bubble").click());
+  await evaluate(pet, () => {
+    document.querySelector("#bubble-pin").click();
+    document.querySelector("#speech-card").dispatchEvent(new MouseEvent("mouseleave"));
+    hideBubbleLater(30);
+    const range = document.createRange();
+    range.selectNodeContents(speechBubble);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+  });
+  await delay(100);
+  assert.equal(await evaluate(pet, () => bubbleVisible && bubblePinned && window.getSelection().toString() === speechBubble.textContent), true);
+  assert.equal(await evaluate(pet, () => document.querySelector("#bubble-speaker").textContent), "Test Character");
+  for (const language of ["zh-CN", "ja-JP", "en-US"]) {
+    for (const scale of [0.75, 1, 2]) {
+      await evaluate(pet, (language, scale) => window.desktopPet.setSettings({ language, scale }), language, scale);
+      await until(() => evaluate(pet, (language, scale) => activeLanguage === language && settings.scale === scale, language, scale), "bubble language and size");
+      assert.equal(await evaluate(pet, () => {
+        const panel = document.querySelector("#speech-panel").getBoundingClientRect();
+        return panel.top >= 0 && panel.bottom + 6 <= canvas.getBoundingClientRect().top
+          && panel.left >= 0 && panel.right <= innerWidth
+          && [...document.querySelectorAll(".bubble-toolbar button")].every((button) => {
+            const bounds = button.getBoundingClientRect();
+            return bounds.width === 24 && bounds.right <= panel.right && button.title && button.getAttribute("aria-label") === button.title;
+          })
+          && [...document.querySelectorAll(".icon-button img")].every((img) => img.complete && img.naturalWidth > 0)
+          && getComputedStyle(speechBubble).userSelect === "text";
+      }), true);
+      await screenshot(pet, `bubble-${language}-${scale}`);
+    }
+  }
+  await evaluate(pet, () => window.desktopPet.setSettings({ scale: 1.5 }));
+  await evaluate(pet, () => document.querySelector("#bubble-history").click());
+  await until(() => chat.isVisible(), "bubble opens history");
+  await evaluate(pet, () => document.querySelector("#bubble-reply").click());
+  await until(() => quick.isVisible(), "bubble opens quick reply");
+  const beforeRecallRequests = requests.length;
+  const beforeRecallHistory = (await evaluate(pet, () => window.desktopPet.getChatState())).history;
+  await evaluate(pet, () => document.querySelector("#bubble-dismiss").click());
+  assert.equal(await evaluate(pet, () => document.querySelector("#speech-card").hidden), true);
+  await until(() => evaluate(pet, () => !document.querySelector("#last-reply").disabled), "last reply available");
+  await evaluate(pet, () => document.querySelector("#last-reply").click());
+  await until(() => evaluate(pet, () => bubbleVisible && bubblePinned), "last reply restored and pinned");
+  assert.equal(requests.length, beforeRecallRequests);
+  assert.deepEqual((await evaluate(pet, () => window.desktopPet.getChatState())).history, beforeRecallHistory);
+  await evaluate(pet, () => {
+    document.querySelector("#bubble-pin").focus();
+    document.querySelector("#speech-card").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  assert.equal(await evaluate(pet, () => !bubbleVisible && document.activeElement.id === "talk"), true);
+
+  await evaluate(chat, () => {
+    document.querySelector("#message-input").value = "Dismissed stream";
+    document.querySelector("#send-message").click();
+  });
+  await until(() => evaluate(pet, () => bubbleVisible && bubbleStreaming && speechBubble.textContent === "First paragraph"), "dismissable stream");
+  await evaluate(pet, () => document.querySelector("#bubble-dismiss").click());
+  streamResponse.write('data: {"choices":[{"delta":{"content":"Still saved in history"},"finish_reason":"stop"}]}\n\n');
+  streamResponse.end("data: [DONE]\n\n");
+  await until(() => evaluate(chat, () => !document.querySelector("#send-message").disabled), "dismissed stream completed");
+  assert.equal(await evaluate(pet, () => !bubbleVisible && !speechActive && document.querySelector("#speech-card").hidden), true);
+  assert.equal((await evaluate(chat, () => window.desktopPet.getChatState())).history.at(-1).content, "First paragraph\n\nStill saved in history");
 
   await evaluate(chat, () => {
     document.querySelector("#message-input").value = "Stopped stream";
@@ -421,7 +481,7 @@ async function run() {
 
   await evaluate(settings, (url) => window.desktopPet.saveChatConfig({ tts: { provider: "custom", enabled: true, endpoint: `${url}/tts`, customBodyTemplate: '{"text":"{{text}}"}' } }), endpoint);
   await evaluate(pet, () => {
-    document.querySelector("#speech-bubble").dispatchEvent(new MouseEvent("mouseleave"));
+    document.querySelector("#speech-card").dispatchEvent(new MouseEvent("mouseleave"));
     handlePetMessage({ source: "chat", text: "Spoken reply", action: "review" });
   });
   await until(() => evaluate(pet, () => speechActive && activeAudio && !activeAudio.paused), "reply voice starts");
@@ -441,6 +501,7 @@ async function run() {
     await until(() => evaluate(window, () => document.querySelector("#voice-status").textContent === "Speaking…"), "speaking state synchronized");
   }
   await screenshot(pet, "pet-speaking");
+  assert.equal(await evaluate(pet, () => document.querySelector("#speech-panel").getBoundingClientRect().bottom + 6 <= canvas.getBoundingClientRect().top), true);
   await screenshot(quick, "quick-speaking");
   assert.equal(await evaluate(quick, () => ["#quick-input", ".quick-feedback", "#voice-controls"].every((selector) => {
     const rect = document.querySelector(selector).getBoundingClientRect();
@@ -592,7 +653,7 @@ async function run() {
   for (const window of [pet, settings, chat, quick]) {
     assert.deepEqual(await evaluate(window, () => window.smokeErrors), []);
   }
-  console.log("Electron smoke PASS: startup, canvas, resizing, drafts, validation, settings tabs, streaming, stop, long replies, bubble hover, relationship settings, shared memory save/context/disable/delete, touch responses, manual drag restoration, conversation holds, deferred reminders, context isolation, languages, click-only, voice lifecycle/GET/playback errors, import/preview/remove and optional history.");
+  console.log("Electron smoke PASS: startup, canvas, resizing, drafts, validation, settings tabs, streaming, stop, long replies, bubble selection/pin/dismiss/recall, relationship settings, shared memory save/context/disable/delete, touch responses, manual drag restoration, conversation holds, deferred reminders, context isolation, languages, click-only, voice lifecycle/GET/playback errors, import/preview/remove and optional history.");
 }
 
 const watchdog = setTimeout(() => { console.error("Electron smoke timed out"); app.exit(1); }, 120000);

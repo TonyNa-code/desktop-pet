@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("desktopPet", {
   speechStateChanged: (change) => ipcRenderer.send("speech-state-changed", change),
   stopVoice: () => ipcRenderer.invoke("stop-voice"),
   replaySpeech: () => ipcRenderer.invoke("replay-speech"),
+  showLastReply: () => ipcRenderer.invoke("show-last-reply"),
   onSpeechStopped: (callback) => {
     const listener = (_event, generation) => callback(generation);
     ipcRenderer.on("speech-stopped", listener);

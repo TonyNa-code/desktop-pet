@@ -26,7 +26,7 @@ test("invalid settings fall back to usable values and supported sizes", () => {
   for (const scale of [0.75, 1, 1.25, 1.5, 1.75, 2]) {
     const size = app.run(`displaySize(${scale})`);
     assert.ok(size.width >= 320);
-    assert.equal(size.height, 208 * scale + 132);
+    assert.equal(size.height, 208 * scale + 160);
   }
 });
 

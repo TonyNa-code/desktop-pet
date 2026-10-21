@@ -41,33 +41,67 @@ body {
   gap: 6px;
 }
 
-#speech-bubble {
+#speech-card {
   position: relative;
+  border: 1px solid rgba(53, 48, 43, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 16px rgba(44, 39, 33, 0.12);
+  pointer-events: auto;
+}
+
+.bubble-toolbar {
+  height: 28px;
+  padding: 0 5px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+#bubble-speaker {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64716e;
+  font: 500 11px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.icon-button img { width: 16px; height: 16px; opacity: 0.68; }
+.icon-button:hover:not(:disabled), .icon-button[aria-pressed="true"] { background: #e3f0ed; }
+.icon-button:disabled { opacity: 0.35; cursor: default; }
+.icon-button:focus-visible { outline: 2px solid #316e74; outline-offset: -1px; }
+
+#speech-bubble {
   box-sizing: border-box;
   width: 100%;
   max-height: 108px;
   min-height: 34px;
-  padding: 9px 12px;
-  border: 1px solid rgba(53, 48, 43, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 24px rgba(44, 39, 33, 0.16);
+  padding: 3px 12px 9px;
   color: #3d3730;
   font: 500 12.5px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  text-align: center;
-  white-space: normal;
+  text-align: left;
+  white-space: pre-wrap;
   overflow: auto;
   overflow-wrap: anywhere;
-  backdrop-filter: blur(8px);
-  transform: translateY(-8px) scale(0.98);
-  opacity: 0;
-  visibility: hidden;
-  cursor: pointer;
-  transition: opacity 160ms ease, transform 160ms ease;
+  user-select: text;
+  cursor: text;
   pointer-events: auto;
 }
 
-#speech-bubble::after {
+#speech-card::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -80,17 +114,20 @@ body {
   transform: translateX(-50%) rotate(45deg);
 }
 
-#speech-bubble.visible {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0) scale(1);
-}
 #speech-bubble:focus-visible { outline: 2px solid #316e74; outline-offset: -3px; }
 
-#talk {
+#pet-controls {
   position: absolute;
   right: 10px;
   bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: auto;
+}
+#last-reply { width: 30px; height: 30px; background: rgba(255, 255, 255, 0.95); border-radius: 6px; }
+#last-reply:disabled { visibility: hidden; }
+#talk {
   height: 30px;
   padding: 0 10px;
   border: 1px solid rgba(49, 110, 116, 0.25);

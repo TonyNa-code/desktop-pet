@@ -22,7 +22,7 @@ const { readPack, installPack } = require("./character-import");
 const { pathToFileURL } = require("node:url");
 
 const BASE_SIZE = { width: 192, height: 208 };
-const BUBBLE_HEIGHT = 132;
+const BUBBLE_HEIGHT = 160;
 const MIN_BUBBLE_WIDTH = 320;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
@@ -110,6 +110,7 @@ let restReminderTimer = null;
 let focusTimer = null;
 let chatHistory = [];
 let chatRequest = null;
+let presentationSequence = 0;
 let chatRevision = 0;
 const chatDrafts = new Map();
 let chatDraftVersion = 0;
@@ -708,6 +709,7 @@ function createWindow() {
   });
 
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  enableInputMenu(mainWindow);
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.once("ready-to-show", () => mainWindow.showInactive());
   mainWindow.on("move", positionQuickChatWindow);
@@ -718,7 +720,10 @@ function createWindow() {
 
 function enableInputMenu(window) {
   window.webContents.on("context-menu", (_event, params) => {
-    if (!params.isEditable) return;
+    if (!params.isEditable) {
+      if (params.selectionText) Menu.buildFromTemplate([{ role: "copy" }]).popup({ window });
+      return;
+    }
     Menu.buildFromTemplate([
       { role: "undo" }, { role: "redo" }, { type: "separator" },
       { role: "cut" }, { role: "copy" }, { role: "paste" },
@@ -1138,6 +1143,7 @@ function chatState() {
     revision: chatRevision,
     draft: chatDraftState(),
     busy: Boolean(chatRequest),
+    canShowLastReply: !chatRequest && !speechSession && Boolean(lastSpokenReply()),
     pending: chatRequest ? { content: chatRequest.text, createdAt: chatRequest.createdAt, reply: chatRequest.reply || "" } : null,
     voiceError,
     voice: {
@@ -1459,12 +1465,13 @@ async function sendChatMessage(_event, rawText, context) {
   if (chatRequest) return { ok: false, error: "chat_busy", ...chatState() };
 
   stopVoice();
-  const request = { text, createdAt: Date.now(), revision: chatRevision, controller: new AbortController() };
+  const request = { text, createdAt: Date.now(), revision: chatRevision, controller: new AbortController(), presentationId: ++presentationSequence };
   chatRequest = request;
   voiceError = false;
   broadcastChatState();
 
-  sendPetMessage(t("pet.thinking"), pickAvailableAction(["review", "idle"]), { source: "chat", speak: false, streaming: true });
+  const presentation = { source: "chat", presentationId: request.presentationId };
+  sendPetMessage(t("pet.thinking"), pickAvailableAction(["review", "idle"]), { ...presentation, speak: false, streaming: true });
   try {
     const result = await requestAssistantReply(text, request.controller, (reply, action) => {
       if (chatRequest !== request) return;
@@ -1473,7 +1480,7 @@ async function sendChatMessage(_event, rawText, context) {
       if (!request.lastProgress || now - request.lastProgress >= 60) {
         request.lastProgress = now;
         broadcastChatState();
-        sendPetMessage(bubblePreview(reply), action && action !== request.action ? action : "", { source: "chat", speak: false, streaming: true });
+        sendPetMessage(bubblePreview(reply), action && action !== request.action ? action : "", { ...presentation, speak: false, streaming: true });
         if (action) request.action = action;
       }
     });
@@ -1483,7 +1490,7 @@ async function sendChatMessage(_event, rawText, context) {
     addChatMessage("user", text, !result.ok);
     const assistantMessage = addChatMessage("assistant", result.reply, !result.ok);
     sendPetMessage(result.reply, result.action, {
-      source: "chat",
+      ...presentation,
       speak: result.ok,
       bubbleText: bubblePreview(result.reply),
     });
@@ -1698,6 +1705,15 @@ function lastSpokenReply() {
   return [...chatHistory].reverse().find((item) => item.role === "assistant" && !item.failed && item.content?.trim());
 }
 
+function showLastReply() {
+  const reply = lastSpokenReply();
+  if (!mainWindow || mainWindow.isDestroyed() || chatRequest || speechSession || !reply) return chatState();
+  sendPetMessage(reply.content, "idle", {
+    source: "chat", presentationId: ++presentationSequence, speak: false, pinned: true,
+  });
+  return chatState();
+}
+
 function stopVoice() {
   speechGeneration += 1;
   speechSession?.controller?.abort();
@@ -1740,7 +1756,7 @@ function replaySpeech() {
   speechSession = { id: ++speechSequence, status: "preparing", controller: null };
   voiceError = false;
   broadcastChatState();
-  sendPetMessage(reply.content, "idle", { source: "chat" });
+  sendPetMessage(reply.content, "idle", { source: "chat", presentationId: ++presentationSequence });
   return chatState();
 }
 
@@ -1964,6 +1980,7 @@ app.whenReady().then(() => {
   ipcMain.on("speech-state-changed", speechStateChanged);
   ipcMain.handle("stop-voice", stopVoice);
   ipcMain.handle("replay-speech", replaySpeech);
+  ipcMain.handle("show-last-reply", showLastReply);
   ipcMain.handle("synthesize-speech", synthesizeSpeech);
   ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
   ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));

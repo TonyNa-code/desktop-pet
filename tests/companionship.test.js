@@ -58,7 +58,7 @@ test("synthesis and playback both hold the bubble until audio ends", async () =>
   let resolve;
   const pet = loadPet({ synthesizeSpeech: () => new Promise((done) => { resolve = done; }) });
   pet.run('settings.tts = {enabled:true,provider:"custom"}; handlePetMessage({source:"chat",text:"Reply",action:"review"})');
-  pet.bubble.events.mouseleave();
+  pet.card.events.mouseleave();
   assert.equal(pet.run("speechActive"), true);
   assert.equal(pet.timeouts.has(pet.run("bubbleTimer")), false);
   await new Promise((done) => setImmediate(done));

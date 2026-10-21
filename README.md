@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.2 conversation update:** shared session-only drafts, quick-window retry, and steadier reading during streamed replies. [Release notes](docs/releases/v0.4.2.md). Includes the [0.4.1 safety fixes and TTS compatibility changes](docs/releases/v0.4.1.md).
+**0.4.3 bubble update:** select text, pin a reply beside your character, reply directly, or bring back the last completed reply. [Release notes](docs/releases/v0.4.3.md). Includes the [0.4.1 safety fixes and TTS compatibility changes](docs/releases/v0.4.1.md).
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
@@ -153,7 +153,8 @@ Available in 0.4.0:
 - Standard editing shortcuts and input-field context menus support pasting API keys and messages.
 - Settings are grouped into General, Character, Memories, Chat and Voice, with a fixed save bar and unsaved-change confirmation.
 - Replies can stream as they arrive. Stop or retry a reply in Full Chat; Quick Input also supports stopping. Disable `Stream replies` for a service that only supports non-streaming requests.
-- Long replies keep their paragraphs. Pet bubbles stay longer for longer text, pause on hover, and open Full Chat when clicked.
+- Long replies keep their paragraphs and support scrolling and text selection. Bubbles pause while hovered or keyboard-focused. Their toolbar opens Quick Input or Full Chat, pins the current reply, or dismisses it.
+- Show last reply beside Talk restores this character's latest completed reply, pinned for reading. It does not contact a model or voice service or change affection. Dismissing a reply stops its voice; any unfinished generation continues into chat history without reopening the bubble. To stop generation, use Stop in either chat window. History saving remains optional and off by default.
 - Each character has its own persona, affinity and conversation. Model and voice service settings are shared. Existing settings migrate to the currently selected character.
 - Import a character folder or ZIP from the Character tab, review its preview, then add it. Packs are stored separately from the installed app. Removing an imported character deletes its local profile and saved history, not the original source files.
 - Custom TTS supports JSON POST and Query GET. GET templates must contain only scalar values. Voice tests report playback failures, not just HTTP success. Raw PCM is not supported; use WAV, MP3, OGG or AAC supported by the service and audio decoder.

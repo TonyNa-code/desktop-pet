@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.2 对话体验更新：**窗口间共享临时草稿，小窗支持失败重试，流式回复不再反复重建聊天记录。[更新说明](docs/releases/v0.4.2.md)。包含 [0.4.1 安全修复与 TTS 兼容性调整](docs/releases/v0.4.1.md)。
+**0.4.3 气泡体验更新：**回复支持选字、固定、直接接话和收起，也能找回当前角色的上一条完整回复。[更新说明](docs/releases/v0.4.3.md)。包含 [0.4.1 安全修复与 TTS 兼容性调整](docs/releases/v0.4.1.md)。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
@@ -146,7 +146,8 @@ API key 只保存在本机。应用会优先用系统安全存储加密；如果
 - 休息和专注提醒会等待对话气泡结束。只保留最新的一条待显示提醒，超过一分钟的旧提醒不再补发。
 - 设置分为通用、角色、共同记忆、聊天和语音，底部固定保存按钮；退出前提示未保存的修改。
 - 支持流式回复、停止生成与失败重试。快速输入也能停止生成；服务不支持流式时，可在聊天设置中关闭。
-- 长回复保留完整段落；气泡根据长度延时，悬停暂停，点击打开完整聊天。
+- 长回复保留段落，支持滚动、选字和复制。鼠标悬停或键盘焦点停留时暂停隐藏，气泡顶部可直接接话、打开完整聊天、固定或收起回复。
+- “对话”旁的“找回上一条回复”会固定显示当前角色最近一条完整回复，不调用模型或语音服务，不改变好感度。收起会停止当前朗读；尚未生成完的回答继续进入聊天记录，不再弹出气泡。要中止生成，请使用聊天窗口的“停止”。聊天记录保存仍为可选，默认关闭。
 - 各角色分别保存人设、好感度和对话；模型与语音服务配置共用。升级时旧设定只归到当前角色。
 - 在角色页导入文件夹或 ZIP，预览确认后添加，无需修改安装目录。移除导入角色会删除其本地档案和聊天记录，不影响原始文件。
 - 自定义语音支持 JSON POST 和 Query GET；GET 模板不能包含嵌套对象或数组。测试会反馈音频播放失败。暂不支持 raw PCM，请选择服务及播放器支持的 WAV、MP3、OGG 或 AAC。

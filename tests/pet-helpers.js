@@ -12,8 +12,15 @@ function loadPet(api = {}) {
   const audio = [];
   const events = {};
   let timerId = 0;
-  const bubble = { textContent: "", events: {}, addEventListener(name, fn) { this.events[name] = fn; }, classList: { add() {}, remove() {} } };
-  const talk = { textContent: "", addEventListener() {} };
+  const nodes = new Map();
+  for (const id of ["speech-bubble", "speech-card", "bubble-speaker", "bubble-reply", "bubble-history", "bubble-pin", "bubble-dismiss", "last-reply", "talk"]) {
+    nodes.set(`#${id}`, { textContent: "", events: {}, attributes: {},
+      addEventListener(name, fn) { this.events[name] = fn; },
+      setAttribute(name, value) { this.attributes[name] = value; },
+      contains(node) { return node === this; }, focus() {}, classList: { add() {}, remove() {} } });
+  }
+  const bubble = nodes.get("#speech-bubble");
+  const card = nodes.get("#speech-card");
   const canvas = {
     width: 768, height: 832, classList: { add() {}, remove() {} },
     getBoundingClientRect: () => ({ top: 0, left: 0, width: 192, height: 208 }),
@@ -33,8 +40,10 @@ function loadPet(api = {}) {
     DesktopPetI18n: i18n,
     DesktopPetSpeechText: require("../src/speech-text"),
     desktopPet: { getAppState: () => new Promise(() => {}), onAppStateUpdated() {}, onPetMessage() {},
+      getChatState: () => new Promise(() => {}), onChatStateUpdated() {},
       recordInteraction() {}, dragStart() {}, dragEnd() {}, beginSpeech: async () => 1,
-      speechStateChanged() {}, onSpeechStopped() {}, openChatWindow() {}, ...api },
+      speechStateChanged() {}, onSpeechStopped() {}, openChatWindow() {}, openQuickChatWindow() {},
+      stopVoice() {}, showLastReply() {}, ...api },
     addEventListener(name, handler) { events[name] = handler; },
     setInterval(fn) { intervals.set(++timerId, fn); return timerId; },
     clearInterval(id) { intervals.delete(id); },
@@ -43,11 +52,11 @@ function loadPet(api = {}) {
   };
   const context = vm.createContext({
     window, Image, Audio, console, performance,
-    document: { querySelector: (selector) => selector === "#pet" ? canvas : selector === "#talk" ? talk : bubble,
+    document: { querySelector: (selector) => selector === "#pet" ? canvas : nodes.get(selector),
       documentElement: { style: { setProperty() {} } } },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/renderer.js"), "utf8"), context);
-  return { context, intervals, timeouts, durations, images, draws, audio, bubble, events,
+  return { context, intervals, timeouts, durations, images, draws, audio, bubble, card, nodes, events,
     fireTimer(id) { const fn = timeouts.get(id); timeouts.delete(id); fn?.(); },
     run: (code) => vm.runInContext(code, context) };
 }

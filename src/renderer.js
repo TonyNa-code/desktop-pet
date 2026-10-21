@@ -1,5 +1,12 @@
 const canvas = document.querySelector("#pet");
 const speechBubble = document.querySelector("#speech-bubble");
+const speechCard = document.querySelector("#speech-card");
+const bubbleSpeaker = document.querySelector("#bubble-speaker");
+const bubbleReply = document.querySelector("#bubble-reply");
+const bubbleHistory = document.querySelector("#bubble-history");
+const bubblePin = document.querySelector("#bubble-pin");
+const bubbleDismiss = document.querySelector("#bubble-dismiss");
+const lastReplyButton = document.querySelector("#last-reply");
 const talkButton = document.querySelector("#talk");
 const ctx = canvas.getContext("2d", { alpha: true });
 const i18n = window.DesktopPetI18n;
@@ -219,6 +226,7 @@ function applyAppState(nextAppState = {}) {
     expressionMode: nextAppState.settings?.expressionMode === "clickOnly" ? "clickOnly" : "automatic",
     interactionResponses: nextAppState.settings?.interactionResponses !== false,
     userName: nextAppState.settings?.persona?.userName || "",
+    characterName: nextAppState.settings?.persona?.name || character.name,
     scale: Number(nextAppState.settings?.scale) || 1,
     alwaysOnTop: nextAppState.settings?.alwaysOnTop !== false,
     tts: {
@@ -244,7 +252,8 @@ function applyAppState(nextAppState = {}) {
   }
   activeLanguage = settings.resolvedLanguage;
   talkButton.textContent = text("pet.talk");
-  talkButton.title = text("quick.toCharacter", { name: character.name });
+  talkButton.title = text("quick.toCharacter", { name: settings.characterName });
+  updateBubbleControls();
   document.documentElement.lang = activeLanguage;
   applyPetLayout();
 
@@ -430,11 +439,36 @@ let bubbleDeadline = 0;
 let bubbleRemaining = 0;
 let bubblePaused = false;
 let bubbleStreaming = false;
+let bubblePinned = false;
+let bubbleHovered = false;
+let bubbleFocused = false;
+let presentationId = null;
+let dismissedPresentationId = null;
+
+function updateBubbleControls() {
+  const name = settings.characterName || character.name;
+  bubbleSpeaker.textContent = name;
+  bubbleSpeaker.title = name;
+  for (const [button, key] of [[bubbleReply, "pet.reply"], [bubbleHistory, "pet.openChat"],
+    [bubblePin, bubblePinned ? "pet.unpinReply" : "pet.pinReply"], [bubbleDismiss, "pet.dismissReply"],
+    [lastReplyButton, "pet.lastReply"]]) {
+    button.title = text(key);
+    button.setAttribute("aria-label", button.title);
+  }
+  speechBubble.setAttribute("aria-label", name);
+  bubblePin.setAttribute("aria-pressed", String(bubblePinned));
+}
 
 function dismissBubble() {
   window.clearTimeout(bubbleTimer);
+  speechCard.hidden = true;
   speechBubble.classList.remove("visible");
   bubbleVisible = false;
+  bubblePinned = false;
+  bubbleHovered = false;
+  bubbleFocused = false;
+  bubblePaused = false;
+  updateBubbleControls();
   conversationActive = false;
   conversationAction = "idle";
   temporaryToken += 1;
@@ -449,15 +483,18 @@ function clearPresentation() {
   queuedNotice = null;
   bubbleStreaming = false;
   bubblePaused = false;
+  presentationId = null;
+  dismissedPresentationId = null;
   stopSpeech();
   dismissBubble();
+  speechBubble.textContent = "";
 }
 
 function hideBubbleLater(duration) {
   window.clearTimeout(bubbleTimer);
   bubbleRemaining = duration;
   bubbleDeadline = Date.now() + duration;
-  if (!bubblePaused && !bubbleStreaming && !speechActive) bubbleTimer = window.setTimeout(dismissBubble, duration);
+  if (bubbleVisible && !bubblePaused && !bubblePinned && !bubbleStreaming && !speechActive) bubbleTimer = window.setTimeout(dismissBubble, duration);
 }
 
 function showBubble(text, duration = Math.min(22000, Math.max(4500, String(text || "").length * 110))) {
@@ -465,24 +502,54 @@ function showBubble(text, duration = Math.min(22000, Math.max(4500, String(text 
   window.clearTimeout(bubbleTimer);
   const continuing = speechBubble.textContent && String(text).startsWith(speechBubble.textContent);
   const follow = continuing && speechBubble.scrollHeight - speechBubble.scrollTop - speechBubble.clientHeight < 24;
-  speechBubble.textContent = text;
+  if (speechBubble.textContent !== String(text)) speechBubble.textContent = text;
   if (follow) speechBubble.scrollTop = speechBubble.scrollHeight;
   else if (!continuing) speechBubble.scrollTop = 0;
   speechBubble.classList.add("visible");
+  speechCard.hidden = false;
   bubbleVisible = true;
-  speechBubble.title = window.DesktopPetI18n.t("pet.openChat", {}, activeLanguage);
   hideBubbleLater(duration);
 }
 
-speechBubble.addEventListener("mouseenter", () => {
-  bubblePaused = true;
-  bubbleRemaining = Math.max(1500, bubbleDeadline - Date.now());
-  window.clearTimeout(bubbleTimer);
+function pauseBubble() {
+  const paused = bubbleHovered || bubbleFocused;
+  if (paused === bubblePaused) return;
+  if (paused) {
+    bubbleRemaining = Math.max(3000, bubbleDeadline - Date.now());
+    window.clearTimeout(bubbleTimer);
+  }
+  bubblePaused = paused;
+  if (!paused) hideBubbleLater(Math.max(3000, bubbleRemaining));
+}
+
+speechCard.addEventListener("mouseenter", () => { bubbleHovered = true; pauseBubble(); });
+speechCard.addEventListener("mouseleave", () => { bubbleHovered = false; pauseBubble(); });
+speechCard.addEventListener("focusin", () => { bubbleFocused = true; pauseBubble(); });
+speechCard.addEventListener("focusout", (event) => { bubbleFocused = speechCard.contains(event.relatedTarget); pauseBubble(); });
+speechCard.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  closeBubble();
+  talkButton.focus();
 });
-speechBubble.addEventListener("mouseleave", () => { bubblePaused = false; hideBubbleLater(bubbleRemaining); });
-speechBubble.addEventListener("focus", () => { bubblePaused = true; window.clearTimeout(bubbleTimer); });
-speechBubble.addEventListener("blur", () => { bubblePaused = false; hideBubbleLater(Math.max(3000, bubbleRemaining)); });
-speechBubble.addEventListener("click", () => window.desktopPet.openChatWindow());
+function closeBubble() {
+  // Later chunks still enter chat history, but must not reopen a dismissed reply.
+  dismissedPresentationId = presentationId;
+  queuedNotice = null;
+  bubbleStreaming = false;
+  stopSpeech();
+  window.desktopPet.stopVoice();
+  dismissBubble();
+}
+bubbleDismiss.addEventListener("click", closeBubble);
+bubblePin.addEventListener("click", () => {
+  bubblePinned = !bubblePinned;
+  updateBubbleControls();
+  hideBubbleLater(Math.max(3000, bubbleRemaining));
+});
+bubbleReply.addEventListener("click", () => window.desktopPet.openQuickChatWindow());
+bubbleHistory.addEventListener("click", () => window.desktopPet.openChatWindow());
+lastReplyButton.addEventListener("click", () => window.desktopPet.showLastReply());
 talkButton.addEventListener("click", () => window.desktopPet.openQuickChatWindow());
 
 function finishSpeech(token, failed = false) {
@@ -590,12 +657,19 @@ function handlePetMessage(message = {}) {
     return;
   }
   const isChat = message.source === "chat";
-  if (!isChat && (conversationActive || speechActive)) {
+  if (isChat && message.presentationId != null && message.presentationId === dismissedPresentationId) return;
+  if (!isChat && (conversationActive || speechActive || bubblePinned)) {
     // Keep only the latest recent reminder; never replay a backlog after a chat.
     queuedNotice = { message, expiresAt: Date.now() + 60000 };
     return;
   }
   const wasStreaming = bubbleStreaming;
+  const nextPresentationId = isChat ? message.presentationId ?? null : null;
+  if (nextPresentationId !== presentationId || !isChat) {
+    bubblePinned = message.pinned === true;
+    presentationId = nextPresentationId;
+    updateBubbleControls();
+  }
   bubbleStreaming = message.streaming === true;
   const text = typeof message === "string" ? message : message.text;
   const bubbleText = typeof message === "object" && message.bubbleText ? message.bubbleText : text;
@@ -670,12 +744,25 @@ window.addEventListener("blur", cancelDrag);
 window.addEventListener("pointercancel", cancelDrag);
 
 window.addEventListener("contextmenu", (event) => {
+  if (speechBubble.contains(event.target)) return;
   event.preventDefault();
   window.desktopPet.showContextMenu();
 });
 
 window.desktopPet.onAppStateUpdated(applyAppState);
 window.desktopPet.onPetMessage(handlePetMessage);
+
+let receivedChatUpdate = false;
+function updateReplyAvailability(chatState) {
+  lastReplyButton.disabled = !chatState.canShowLastReply;
+}
+window.desktopPet.onChatStateUpdated((chatState) => {
+  receivedChatUpdate = true;
+  updateReplyAvailability(chatState);
+});
+window.desktopPet.getChatState().then((chatState) => {
+  if (!receivedChatUpdate) updateReplyAvailability(chatState);
+}).catch(() => {});
 
 window.desktopPet.getAppState()
   .then((initialAppState) => {

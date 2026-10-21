@@ -145,10 +145,10 @@ test("long bubbles remain longer, pause on hover, and open chat", () => {
   const pet = loadPet({ openChatWindow: () => { opened = true; } });
   pet.run('showBubble("a".repeat(180))');
   assert.equal(pet.run("bubbleRemaining"), 19800);
-  pet.bubble.events.mouseenter();
+  pet.card.events.mouseenter();
   assert.equal(pet.timeouts.size, 0);
-  pet.bubble.events.mouseleave();
+  pet.card.events.mouseleave();
   assert.equal(pet.timeouts.size, 1);
-  pet.bubble.events.click();
+  pet.nodes.get("#bubble-history").events.click();
   assert.equal(opened, true);
 });

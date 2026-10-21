@@ -9,14 +9,26 @@
   </head>
   <body>
     <div id="speech-panel">
-      <button id="speech-bubble" type="button" aria-live="polite"></button>
+      <div id="speech-card" hidden>
+        <div class="bubble-toolbar">
+          <span id="bubble-speaker"></span>
+          <button id="bubble-reply" class="icon-button" type="button"><img src="./icons/message-square.svg" alt="" /></button>
+          <button id="bubble-history" class="icon-button" type="button"><img src="./icons/book-open.svg" alt="" /></button>
+          <button id="bubble-pin" class="icon-button" type="button" aria-pressed="false"><img src="./icons/pin.svg" alt="" /></button>
+          <button id="bubble-dismiss" class="icon-button" type="button"><img src="./icons/x.svg" alt="" /></button>
+        </div>
+        <div id="speech-bubble" tabindex="0" role="region" aria-live="polite"></div>
+      </div>
       <div id="voice-controls" class="voice-controls" hidden>
         <span id="voice-status" role="status"></span>
         <button id="voice-toggle" type="button"></button>
       </div>
     </div>
     <canvas id="pet" width="768" height="832" aria-label="Desktop pet"></canvas>
-    <button id="talk" type="button">对话</button>
+    <div id="pet-controls">
+      <button id="last-reply" class="icon-button" type="button" disabled><img src="./icons/history.svg" alt="" /></button>
+      <button id="talk" type="button">对话</button>
+    </div>
     <script src="./i18n.js"></script>
     <script src="./speech-text.js"></script>
     <script src="./renderer.js"></script>
