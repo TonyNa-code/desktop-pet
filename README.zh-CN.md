@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.4 桌面体验更新：**记住桌宠位置，适应显示器变化，可从菜单栏或系统托盘找回桌宠。[更新说明](docs/releases/v0.4.4.md)。包含 [0.4.3 气泡交互](docs/releases/v0.4.3.md)与 [0.4.1 安全修复](docs/releases/v0.4.1.md)。
+**0.4.5 桌面体验更新：**记住桌宠位置，可从菜单栏或系统托盘找回桌宠；取消退出时保留所有窗口。[更新说明](docs/releases/v0.4.5.md)。包含 [0.4.3 气泡交互](docs/releases/v0.4.3.md)与 [0.4.1 安全修复](docs/releases/v0.4.1.md)。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)

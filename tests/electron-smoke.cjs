@@ -130,8 +130,22 @@ async function run() {
     await evaluate(pet, () => window.desktopPet.setSettings({ characterId: "default" }));
     await delay(1100);
     assert.equal(BrowserWindow.getAllWindows().length, 1);
-    console.log("Electron restart PASS: position and saved settings restored; first-launch setup does not reopen.");
-    return;
+    await evaluate(pet, () => window.desktopPet.openCompanionSettings());
+    const settings = await findWindow("settings.html");
+    await until(() => evaluate(settings, () => document.querySelector("#persona-name").value === "Test Character"), "restored settings form");
+    await evaluate(settings, () => { document.querySelector("#persona-name").value = "Discard this name"; });
+    let prompts = 0;
+    dialog.showMessageBox = async () => { prompts++; return { response: 1 }; };
+    app.once("will-quit", () => {
+      try {
+        assert.equal(prompts, 1);
+        assert.equal(JSON.parse(fs.readFileSync(path.join(dataDir, "settings.json"), "utf8")).persona.name, "Test Character");
+        fs.writeFileSync(path.join(dataDir, "restart.passed"), "ok");
+        console.log("Electron restart PASS: position and saved settings restored; confirmed quit exits without saving discarded edits.");
+      } catch (error) { console.error(error); app.exit(1); }
+    });
+    app.quit();
+    await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Confirmed quit did not exit")), 5000));
   }
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   require("../src/main.js");
@@ -728,6 +742,15 @@ async function run() {
   assert.deepEqual(restorePlacement(savedPlacement, {width:320,height:472}, [finalArea], finalArea), pet.getBounds());
   fs.writeFileSync(path.join(dataDir, "expected-pet-bounds.json"), JSON.stringify(pet.getBounds()));
   assert.deepEqual(Object.keys(savedPlacement).sort(), ["area","bottom","center","version"]);
+  let leavePrompts = 0;
+  dialog.showMessageBox = async () => { leavePrompts++; return { response: 0 }; };
+  await evaluate(settings, () => { document.querySelector("#persona-name").value = "Unsaved name"; });
+  app.quit();
+  await until(() => leavePrompts === 1, "confirm before quitting with unsaved settings");
+  await delay(300);
+  for (const window of [pet, settings, chat, quick]) assert.equal(window.isDestroyed(), false, "Cancelling quit keeps every window alive");
+  assert.equal(await evaluate(settings, () => document.querySelector("#persona-name").value), "Unsaved name");
+  assert.deepEqual((await evaluate(pet, () => window.desktopPet.getChatState())).draft, beforeSecondInstance);
   for (const window of [pet, settings, chat, quick]) {
     assert.deepEqual(await evaluate(window, () => window.smokeErrors), []);
   }
@@ -742,6 +765,7 @@ run().then(() => finish(0), async (error) => {
 });
 function finish(code) {
   clearTimeout(watchdog);
+  if (code === 0) fs.writeFileSync(path.join(dataDir, `${process.env.PET_SMOKE_PHASE || "initial"}.passed`), "ok");
   server.closeAllConnections();
   server.close();
   app.exit(code);

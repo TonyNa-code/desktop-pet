@@ -887,6 +887,13 @@ for (const tab of document.querySelectorAll("[data-tab]")) {
   });
 }
 selectTab(selectedTab);
+window.desktopPet.onAppQuitRequested(async () => {
+  try {
+    const confirmed = await mayLeave();
+    if (confirmed) allowClose = true;
+    window.desktopPet.confirmAppQuit(confirmed);
+  } catch { window.desktopPet.confirmAppQuit(false); }
+});
 window.addEventListener("beforeunload", (event) => {
   if (allowClose || (!changedFields().length && !saveSettingsButton.disabled)) return;
   event.preventDefault(); event.returnValue = false;

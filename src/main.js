@@ -128,6 +128,18 @@ let petPlacement = null;
 let savedPlacementKey = "";
 let placementTimer = null;
 let displayTimer = null;
+let quitPending = false;
+let quitApproved = false;
+
+function confirmAppQuit(event, confirmed) {
+  if (!quitPending || !companionSettingsWindow || companionSettingsWindow.isDestroyed()
+    || event.sender !== companionSettingsWindow.webContents) return;
+  quitPending = false;
+  if (confirmed === true) {
+    quitApproved = true;
+    app.quit();
+  }
+}
 
 function placementPath() { return path.join(app.getPath("userData"), "window-placement.json"); }
 
@@ -939,6 +951,11 @@ function createCompanionSettingsWindow() {
   companionSettingsWindow.once("ready-to-show", () => companionSettingsWindow.show());
   companionSettingsWindow.on("closed", () => {
     companionSettingsWindow = null;
+    if (quitPending) {
+      quitPending = false;
+      quitApproved = true;
+      app.quit();
+    }
   });
 }
 
@@ -2091,6 +2108,7 @@ if (ownsInstance) app.whenReady().then(() => {
   ipcMain.handle("stop-chat", stopChat);
   ipcMain.on("set-chat-draft", setChatDraft);
   ipcMain.handle("confirm-discard", confirmDiscard);
+  ipcMain.on("confirm-app-quit", confirmAppQuit);
   ipcMain.handle("preview-character-import", previewCharacterImport);
   ipcMain.handle("confirm-character-import", confirmCharacterImport);
   ipcMain.handle("remove-character-import", removeCharacterImport);
@@ -2136,7 +2154,19 @@ if (ownsInstance) app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  // Ask before Electron closes any other window, so cancelling preserves the session.
+  if (!quitApproved && companionSettingsWindow && !companionSettingsWindow.isDestroyed()
+    && !companionSettingsWindow.webContents.isLoading() && !companionSettingsWindow.webContents.isCrashed()) {
+    event.preventDefault();
+    if (!quitPending) {
+      quitPending = true;
+      companionSettingsWindow.webContents.send("app-quit-requested");
+    }
+    companionSettingsWindow.show();
+    companionSettingsWindow.focus();
+    return;
+  }
   clearTimeout(displayTimer);
   displayTimer = null;
   clearTimeout(placementTimer);

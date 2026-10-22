@@ -14,6 +14,10 @@ try {
     });
     if (result.error) console.error(result.error.message);
     status = result.status ?? 1;
+    if (status === 0 && !fs.existsSync(path.join(dataDir, `${phase}.passed`))) {
+      console.error(`Electron ${phase} exited before completing its checks`);
+      status = 1;
+    }
     if (status !== 0) break;
   }
 } finally {

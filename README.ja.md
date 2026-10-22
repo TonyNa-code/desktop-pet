@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.4 デスクトップ操作の改善：**ペットの位置を記憶し、画面構成の変更に対応。メニューバーやシステムトレイからペットを表示できます。[更新内容](docs/releases/v0.4.4.md)。[0.4.3 の吹き出し操作](docs/releases/v0.4.3.md)と [0.4.1 の安全性修正](docs/releases/v0.4.1.md)も含みます。
+**0.4.5 デスクトップ操作の改善：**ペットの位置を記憶し、メニューバーやシステムトレイから再表示できます。終了をキャンセルした場合はすべてのウィンドウを保持します。[更新内容](docs/releases/v0.4.5.md)。[0.4.3 の吹き出し操作](docs/releases/v0.4.3.md)と [0.4.1 の安全性修正](docs/releases/v0.4.1.md)も含みます。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)

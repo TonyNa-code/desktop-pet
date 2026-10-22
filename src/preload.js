@@ -18,6 +18,12 @@ contextBridge.exposeInMainWorld("desktopPet", {
   clearChatHistory: () => ipcRenderer.invoke("clear-chat-history"),
   stopChat: () => ipcRenderer.invoke("stop-chat"),
   confirmDiscard: () => ipcRenderer.invoke("confirm-discard"),
+  confirmAppQuit: (confirmed) => ipcRenderer.send("confirm-app-quit", confirmed),
+  onAppQuitRequested: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("app-quit-requested", listener);
+    return () => ipcRenderer.off("app-quit-requested", listener);
+  },
   previewCharacterImport: (kind) => ipcRenderer.invoke("preview-character-import", kind),
   confirmCharacterImport: (token) => ipcRenderer.invoke("confirm-character-import", token),
   removeCharacterImport: (id) => ipcRenderer.invoke("remove-character-import", id),

@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.4 desktop update:** remember the pet's position, recover after display changes, and find the pet from the menu bar or system tray. [Release notes](docs/releases/v0.4.4.md). Includes the [0.4.3 reply bubble controls](docs/releases/v0.4.3.md) and [0.4.1 safety fixes](docs/releases/v0.4.1.md).
+**0.4.5 desktop update:** remember the pet's position, find it from the menu bar or system tray, and keep all windows open when cancelling Quit. [Release notes](docs/releases/v0.4.5.md). Includes the [0.4.3 reply bubble controls](docs/releases/v0.4.3.md) and [0.4.1 safety fixes](docs/releases/v0.4.1.md).
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
