@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.3 气泡体验更新：**回复支持选字、固定、直接接话和收起，也能找回当前角色的上一条完整回复。[更新说明](docs/releases/v0.4.3.md)。包含 [0.4.1 安全修复与 TTS 兼容性调整](docs/releases/v0.4.1.md)。
+**0.4.4 桌面体验更新：**记住桌宠位置，适应显示器变化，可从菜单栏或系统托盘找回桌宠。[更新说明](docs/releases/v0.4.4.md)。包含 [0.4.3 气泡交互](docs/releases/v0.4.3.md)与 [0.4.1 安全修复](docs/releases/v0.4.1.md)。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
@@ -77,6 +77,14 @@ macOS 如果提示无法验证开发者，右键 app 选择 `打开`，再确认
   - 使用系统语音、本地 GPT-SoVITS 推理服务或自定义语音接口朗读回复
 - 设置会自动保存到本机
 - GitHub Actions 可在 Windows / macOS / Linux 上构建安装包并更新 Release
+
+## 位置与找回
+
+把桌宠拖到喜欢的位置，重启后会回到那里。拔掉显示器或调整屏幕工作区后，桌宠会移回可用屏幕，快速输入框跟随移动。屏幕放不下时，角色会临时缩小，保留原先选择的大小设置。
+
+点击 macOS 菜单栏或 Windows/Linux 系统托盘中的 Desktop Pet 图标，可选择“找回桌宠”、重置位置、打开聊天和设置，或退出。再次打开应用也能唤回正在运行的桌宠，不会同时启动两份。Linux 托盘与窗口定位受桌面环境影响，Wayland 可能限制程序调整窗口位置。
+
+位置与聊天数据分开保存在本机，不会发送给聊天或语音服务，也不记录显示器名称或硬件标识。
 
 ## 源码运行
 

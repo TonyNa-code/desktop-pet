@@ -8,6 +8,8 @@ const {
   Notification,
   safeStorage,
   dialog,
+  Tray,
+  powerMonitor,
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -17,6 +19,7 @@ const { readChatResponse } = require("./chat-response");
 const { AUDIO_LIMIT, ERROR_LIMIT, readResponseBytes, readResponseJson, returnedAudioUrl, audioDataUrl: validateAudioDataUrl, redactServiceText } = require("./network-safety");
 const { expressionInstruction, parseCompanionReply } = require("./companion-response");
 const { companionBounds } = require("./companion-layout");
+const { normalizePlacement, fitBounds, capturePlacement, defaultBounds, restorePlacement } = require("./window-placement");
 const { modelsEndpoint, readModelList } = require("./model-list");
 const { readPack, installPack } = require("./character-import");
 const { pathToFileURL } = require("node:url");
@@ -120,6 +123,111 @@ let speechGeneration = 0;
 let speechSequence = 0;
 let speechSession = null;
 let pendingImport = null;
+let tray = null;
+let petPlacement = null;
+let savedPlacementKey = "";
+let placementTimer = null;
+let displayTimer = null;
+
+function placementPath() { return path.join(app.getPath("userData"), "window-placement.json"); }
+
+function readPlacement() {
+  try { petPlacement = normalizePlacement(JSON.parse(fs.readFileSync(placementPath(), "utf8"))); }
+  catch { petPlacement = null; }
+  savedPlacementKey = petPlacement ? JSON.stringify(petPlacement) : "";
+}
+
+function savePlacement() {
+  clearTimeout(placementTimer);
+  if (!mainWindow || mainWindow.isDestroyed() || dragSnapshot) return;
+  const bounds = mainWindow.getBounds();
+  petPlacement = capturePlacement(bounds, screen.getDisplayMatching(bounds).workArea);
+  if (!petPlacement) return;
+  const key = JSON.stringify(petPlacement);
+  if (key === savedPlacementKey) return;
+  try { writeJsonAtomically(placementPath(), petPlacement); savedPlacementKey = key; }
+  catch { /* A failed placement save must not interrupt chat or overwrite other settings. */ }
+}
+
+function windowMoved() {
+  positionQuickChatWindow();
+  if (displayTimer) return;
+  clearTimeout(placementTimer);
+  placementTimer = setTimeout(savePlacement, 300);
+}
+
+function keepAuxiliaryWindowsVisible() {
+  for (const window of [chatWindow, companionSettingsWindow]) {
+    if (!window || window.isDestroyed()) continue;
+    const bounds = window.getBounds();
+    const area = screen.getDisplayMatching(bounds).workArea;
+    window.setMinimumSize(Math.min(window === chatWindow ? 320 : 560, area.width), Math.min(window === chatWindow ? 360 : 620, area.height));
+    window.setBounds(fitBounds(bounds, area));
+  }
+  positionQuickChatWindow();
+}
+
+function restorePetPlacement() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  dragSnapshot = null;
+  const primary = screen.getPrimaryDisplay().workArea;
+  mainWindow.setBounds(restorePlacement(petPlacement, displaySize(), screen.getAllDisplays().map((display) => display.workArea), primary));
+  keepAuxiliaryWindowsVisible();
+  savePlacement();
+}
+
+function scheduleDisplayRecovery() {
+  clearTimeout(placementTimer);
+  clearTimeout(displayTimer);
+  // Display events arrive in bursts; keep the last settled placement until they finish.
+  displayTimer = setTimeout(() => {
+    displayTimer = null;
+    restorePetPlacement();
+  }, 250);
+}
+
+function showPet() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  clearTimeout(displayTimer);
+  displayTimer = null;
+  dragSnapshot = null;
+  const bounds = mainWindow.getBounds();
+  mainWindow.setBounds(fitBounds(bounds, screen.getDisplayMatching(bounds).workArea));
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  keepAuxiliaryWindowsVisible();
+  savePlacement();
+}
+
+function recoveryMenuItems() {
+  return [
+    { id: "show-pet", label: t("menu.showPet"), click: showPet },
+    { id: "reset-position", label: t("menu.resetPosition"), click: () => { resetPosition(); showPet(); } },
+    { type: "separator" },
+    { label: t("menu.quickInput"), click: () => { showPet(); createQuickChatWindow(); } },
+    { label: t("menu.fullChat"), click: createChatWindow },
+    { label: t("menu.chatSettings"), click: createCompanionSettingsWindow },
+    { type: "separator" },
+    { label: t("menu.quit"), click: () => app.quit() },
+  ];
+}
+
+function updateTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  tray.setToolTip(t("app.name"));
+  tray.setContextMenu(Menu.buildFromTemplate(recoveryMenuItems()));
+}
+
+function createTray() {
+  try {
+    const image = nativeImage.createFromPath(path.join(__dirname, "..", "build", process.platform === "win32" ? "icon.ico" : "icon.png"));
+    if (image.isEmpty()) return;
+    tray = new Tray(process.platform === "win32" ? image : image.resize({ width: 20, height: 20 }));
+    tray.on("click", () => { if (process.platform !== "darwin") showPet(); });
+    updateTrayMenu();
+  } catch { tray = null; }
+}
 
 function importedCharactersDir() { return path.join(app.getPath("userData"), "characters"); }
 
@@ -673,11 +781,7 @@ function applyWindowSize(keepCenter = true) {
   const x = keepCenter ? Math.round(bounds.x + bounds.width / 2 - nextSize.width / 2) : bounds.x;
   const y = bounds.y + bounds.height - nextSize.height;
   const area = screen.getDisplayMatching(bounds).workArea;
-  mainWindow.setBounds({
-    x: clamp(x, area.x, Math.max(area.x, area.x + area.width - nextSize.width)),
-    y: clamp(y, area.y, Math.max(area.y, area.y + area.height - nextSize.height)),
-    ...nextSize,
-  }, true);
+  mainWindow.setBounds(fitBounds({ x, y, ...nextSize }, area));
 }
 
 function createWindow() {
@@ -685,13 +789,11 @@ function createWindow() {
   readProfile();
   readCharacterSessions();
   recordLaunch();
+  readPlacement();
   const size = displaySize();
   const primary = screen.getPrimaryDisplay().workArea;
   mainWindow = new BrowserWindow({
-    width: size.width,
-    height: size.height,
-    x: Math.round(primary.x + primary.width - size.width - 72),
-    y: Math.round(primary.y + primary.height - size.height - 72),
+    ...restorePlacement(petPlacement, size, screen.getAllDisplays().map((display) => display.workArea), primary),
     frame: false,
     transparent: true,
     resizable: false,
@@ -712,8 +814,10 @@ function createWindow() {
   enableInputMenu(mainWindow);
   mainWindow.loadFile(path.join(__dirname, "index.html"));
   mainWindow.once("ready-to-show", () => mainWindow.showInactive());
-  mainWindow.on("move", positionQuickChatWindow);
-  mainWindow.on("resize", positionQuickChatWindow);
+  mainWindow.on("move", windowMoved);
+  mainWindow.on("resize", windowMoved);
+  mainWindow.on("close", savePlacement);
+  petPlacement = capturePlacement(mainWindow.getBounds(), screen.getDisplayMatching(mainWindow.getBounds()).workArea);
   mainWindow.webContents.on("render-process-gone", () => stopVoice());
   mainWindow.webContents.on("did-start-loading", () => stopVoice());
 }
@@ -740,19 +844,18 @@ function positionQuickChatWindow() {
 
 function createChatWindow() {
   if (chatWindow && !chatWindow.isDestroyed()) {
+    keepAuxiliaryWindowsVisible();
     chatWindow.show();
     chatWindow.focus();
     return;
   }
 
-  const primary = screen.getPrimaryDisplay().workArea;
+  const pet = mainWindow.getBounds();
+  const area = screen.getDisplayMatching(pet).workArea;
   chatWindow = new BrowserWindow({
-    width: 360,
-    height: 460,
-    minWidth: 320,
-    minHeight: 360,
-    x: Math.round(primary.x + primary.width - 420),
-    y: Math.round(primary.y + primary.height - 560),
+    ...fitBounds({ x: pet.x - 370, y: pet.y + pet.height - 460, width: 360, height: 460 }, area),
+    minWidth: Math.min(320, area.width),
+    minHeight: Math.min(360, area.height),
     title: t("window.chatTitle"),
     show: false,
     backgroundColor: "#f6f7f9",
@@ -809,16 +912,17 @@ function createQuickChatWindow() {
 
 function createCompanionSettingsWindow() {
   if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
+    keepAuxiliaryWindowsVisible();
     companionSettingsWindow.show();
     companionSettingsWindow.focus();
     return;
   }
 
+  const area = screen.getDisplayMatching(mainWindow.getBounds()).workArea;
   companionSettingsWindow = new BrowserWindow({
-    width: 740,
-    height: 760,
-    minWidth: 560,
-    minHeight: 620,
+    ...fitBounds({ x: area.x + (area.width - 740) / 2, y: area.y + (area.height - 760) / 2, width: 740, height: 760 }, area),
+    minWidth: Math.min(560, area.width),
+    minHeight: Math.min(620, area.height),
     title: t("window.settingsTitle"),
     show: false,
     backgroundColor: "#f6f7f9",
@@ -1904,12 +2008,9 @@ function resetPosition() {
   if (!mainWindow) return;
   const size = displaySize();
   const primary = screen.getPrimaryDisplay().workArea;
-  mainWindow.setBounds({
-    width: size.width,
-    height: size.height,
-    x: Math.round(primary.x + primary.width - size.width - 72),
-    y: Math.round(primary.y + primary.height - size.height - 72),
-  }, true);
+  dragSnapshot = null;
+  mainWindow.setBounds(defaultBounds(size, primary));
+  savePlacement();
 }
 
 function beginDrag() {
@@ -1935,6 +2036,11 @@ function moveDrag() {
 
 function endDrag() {
   dragSnapshot = null;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = mainWindow.getBounds();
+  mainWindow.setBounds(fitBounds(bounds, screen.getDisplayMatching(bounds).workArea));
+  positionQuickChatWindow();
+  savePlacement();
 }
 
 function iconImage() {
@@ -1947,6 +2053,8 @@ function setApplicationMenu() {
     {
       label: t("app.name"),
       submenu: [
+        { id: "show-pet", label: t("menu.showPet"), click: showPet },
+        { id: "reset-position", label: t("menu.resetPosition"), click: () => { resetPosition(); showPet(); } },
         { label: t("menu.quickInput"), accelerator: "CommandOrControl+Shift+Space", click: createQuickChatWindow },
         { label: t("menu.fullChat"), accelerator: "CommandOrControl+Shift+C", click: createChatWindow },
         { label: t("menu.chatSettings"), click: createCompanionSettingsWindow },
@@ -1956,9 +2064,19 @@ function setApplicationMenu() {
     },
     { role: "editMenu" },
   ]));
+  updateTrayMenu();
 }
 
-app.whenReady().then(() => {
+// Keep the profile directory consistent before acquiring its instance lock.
+app.setName(i18n.t("app.name", {}, "en-US"));
+const ownsInstance = app.requestSingleInstanceLock();
+if (!ownsInstance) app.quit();
+else {
+  app.on("second-instance", showPet);
+  app.on("activate", showPet);
+}
+
+if (ownsInstance) app.whenReady().then(() => {
   app.setName(t("app.name"));
   createWindow();
 
@@ -2003,6 +2121,9 @@ app.whenReady().then(() => {
   }
 
   setApplicationMenu();
+  createTray();
+  for (const event of ["display-added", "display-removed", "display-metrics-changed"]) screen.on(event, scheduleDisplayRecovery);
+  powerMonitor.on("resume", scheduleDisplayRecovery);
 
   try {
     mainWindow.setIcon?.(iconImage());
@@ -2015,4 +2136,10 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => speechSession?.controller?.abort());
+app.on("before-quit", () => {
+  clearTimeout(displayTimer);
+  displayTimer = null;
+  clearTimeout(placementTimer);
+  savePlacement();
+  speechSession?.controller?.abort();
+});

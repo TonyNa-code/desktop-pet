@@ -13,6 +13,7 @@ function loadMain(overrides = {}) {
         app: {
           whenReady: () => ({ then() {} }), on() {}, getLocale: () => "en-US",
           getPath: () => "test-user-data",
+          setName() {}, requestSingleInstanceLock: () => true, quit() {}, ...overrides.app,
         },
         safeStorage: {
           isEncryptionAvailable: () => true,
@@ -23,6 +24,8 @@ function loadMain(overrides = {}) {
         },
         Menu: { buildFromTemplate: (menu) => menu, setApplicationMenu() {} },
         screen: overrides.screen,
+        Tray: overrides.Tray,
+        nativeImage: overrides.nativeImage,
       };
       if (id === "./i18n") return i18n;
       if (id === "node:fs") return {

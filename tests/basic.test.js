@@ -89,8 +89,8 @@ test("a timed-out model request releases the shared busy state", async () => {
 
 test("dragging moves the native window by the cursor delta and stops on release", () => {
   let cursor = { x: 10, y: 20 };
-  const app = loadMain({ screen: { getCursorScreenPoint: () => cursor } });
-  app.run('globalThis.position = null; mainWindow = {getBounds:()=>({x:100,y:200}),setPosition:(x,y)=>{position={x,y}}}');
+  const app = loadMain({ screen: { getCursorScreenPoint: () => cursor, getDisplayMatching: () => ({workArea:{x:0,y:0,width:1920,height:1080}}) } });
+  app.run('globalThis.position = null; mainWindow = {isDestroyed:()=>false,getBounds:()=>({x:100,y:200,width:320,height:368}),setBounds(){},setPosition:(x,y)=>{position={x,y}}}');
   app.run("beginDrag()");
   cursor = { x: 40, y: 10 };
   const movement = app.run("moveDrag()");

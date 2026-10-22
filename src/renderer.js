@@ -103,8 +103,11 @@ function draw() {
 }
 
 function applyPetLayout() {
-  const petWidth = Math.round(192 * settings.scale);
-  const petHeight = Math.round(208 * settings.scale);
+  const availableScale = Math.min(Number.isFinite(window.innerWidth) ? window.innerWidth / 192 : Infinity,
+    Number.isFinite(window.innerHeight) ? Math.max(0, window.innerHeight - 160) / 208 : Infinity);
+  const scale = Math.min(settings.scale, availableScale);
+  const petWidth = Math.round(192 * scale);
+  const petHeight = Math.round(208 * scale);
   document.documentElement.style.setProperty("--pet-width", `${petWidth}px`);
   document.documentElement.style.setProperty("--pet-height", `${petHeight}px`);
 }
@@ -746,6 +749,7 @@ function cancelDrag() {
   else if (expression) setStaticExpression(expression.state, expression.frame);
 }
 window.addEventListener("blur", cancelDrag);
+window.addEventListener("resize", applyPetLayout);
 window.addEventListener("pointercancel", cancelDrag);
 
 window.addEventListener("contextmenu", (event) => {

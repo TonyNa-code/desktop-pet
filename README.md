@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.3 bubble update:** select text, pin a reply beside your character, reply directly, or bring back the last completed reply. [Release notes](docs/releases/v0.4.3.md). Includes the [0.4.1 safety fixes and TTS compatibility changes](docs/releases/v0.4.1.md).
+**0.4.4 desktop update:** remember the pet's position, recover after display changes, and find the pet from the menu bar or system tray. [Release notes](docs/releases/v0.4.4.md). Includes the [0.4.3 reply bubble controls](docs/releases/v0.4.3.md) and [0.4.1 safety fixes](docs/releases/v0.4.1.md).
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
@@ -77,6 +77,14 @@ If you only want to download and run the app, see [快速上手指南.md](快速
   - Reply voice via system voice, local GPT-SoVITS inference service, or custom voice API
 - Settings are saved locally
 - GitHub Actions builds Windows / macOS / Linux packages and updates the latest release
+
+## Position And Recovery
+
+Drag the pet where you want it; it returns there after restarting. When a display is removed or its work area changes, the pet moves into an available screen, with Quick Input following it. The pet temporarily fits smaller screens without changing your selected size.
+
+Use the Desktop Pet icon in the macOS menu bar or Windows/Linux system tray to choose **Show Pet**, reset its position, open chat or settings, or quit. Opening the app again brings back the running pet without starting another copy. Linux tray support and window placement depend on the desktop environment; Wayland may restrict programmatic positioning.
+
+Position is stored only on this device, separately from conversation data. It is not sent to chat or voice services, and does not include display names or hardware identifiers.
 
 ## Run From Source
 

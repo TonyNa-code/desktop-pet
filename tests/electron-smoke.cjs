@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const http = require("node:http");
+const { spawn } = require("node:child_process");
+const { restorePlacement } = require("../src/window-placement");
 
 const dataDir = process.env.PET_SMOKE_DATA || fs.mkdtempSync(path.join(os.tmpdir(), "desktop-pet-smoke-"));
 const screenshots = path.join(__dirname, "../out/smoke");
@@ -92,10 +94,20 @@ async function screenshot(window, name) {
 }
 
 async function run() {
+  if (process.env.PET_SMOKE_PHASE === "second-instance") {
+    require("../src/main.js");
+    await app.whenReady();
+    throw new Error("A second instance unexpectedly started");
+  }
   if (process.env.PET_SMOKE_PHASE === "restart") {
     require("../src/main.js");
     await app.whenReady();
     const pet = await findWindow("index.html");
+    const placement = JSON.parse(fs.readFileSync(path.join(dataDir, "window-placement.json"), "utf8"));
+    const expected = JSON.parse(fs.readFileSync(path.join(dataDir, "expected-pet-bounds.json"), "utf8"));
+    const restored = restorePlacement(placement, {width:320,height:472}, screen.getAllDisplays().map((item)=>item.workArea), screen.getPrimaryDisplay().workArea);
+    assert.deepEqual(pet.getBounds(), restored);
+    if (JSON.stringify(placement.area) === JSON.stringify(screen.getDisplayMatching(expected).workArea)) assert.deepEqual(pet.getBounds(), expected);
     const state = await evaluate(pet, () => window.desktopPet.getAppState());
     assert.equal(state.settings.persona.name, "Test Character");
     assert.equal(state.settings.persona.userName, "Alex");
@@ -117,7 +129,7 @@ async function run() {
     await evaluate(pet, () => window.desktopPet.setSettings({ characterId: "default" }));
     await delay(1100);
     assert.equal(BrowserWindow.getAllWindows().length, 1);
-    console.log("Electron restart PASS: saved settings restored; first-launch setup does not reopen.");
+    console.log("Electron restart PASS: position and saved settings restored; first-launch setup does not reopen.");
     return;
   }
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -286,6 +298,29 @@ async function run() {
   const expectedQuick = require("../src/companion-layout").companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea);
   assert.deepEqual(quick.getBounds(), expectedQuick);
   pet.setBounds(originalPetBounds);
+  const recovery = Menu.getApplicationMenu().getMenuItemById("show-pet");
+  assert.ok(recovery);
+  pet.hide();
+  recovery.click();
+  await until(() => pet.isVisible(), "recover hidden pet from application menu");
+  pet.hide();
+  app.emit("activate", {}, false);
+  await until(() => pet.isVisible(), "reopen existing application");
+  const profileBeforeRecovery = await evaluate(pet, () => window.desktopPet.getChatState());
+  pet.setPosition(20000, -20000);
+  chat.setPosition(20000, -20000);
+  screen.emit("display-metrics-changed", {}, screen.getPrimaryDisplay(), ["workArea"]);
+  await until(() => {
+    const bounds = pet.getBounds();
+    const area = screen.getDisplayMatching(bounds).workArea;
+    return bounds.x >= area.x && bounds.y >= area.y && bounds.x + bounds.width <= area.x + area.width && bounds.y + bounds.height <= area.y + area.height;
+  }, "recover pet after display change");
+  await delay(400);
+  assert.deepEqual(quick.getBounds(), require("../src/companion-layout").companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea));
+  assert.deepEqual((await evaluate(pet, () => window.desktopPet.getChatState())).history, profileBeforeRecovery.history);
+  const recoveredChat = chat.getBounds();
+  const recoveredArea = screen.getDisplayMatching(recoveredChat).workArea;
+  assert.ok(recoveredChat.x >= recoveredArea.x && recoveredChat.y >= recoveredArea.y);
   await evaluate(quick, () => {
     document.querySelector("#quick-input").value = "Delayed message";
     document.querySelector("#send").click();
@@ -670,10 +705,32 @@ async function run() {
   chat = await findWindow("chat.html");
   await until(() => evaluate(chat, () => document.querySelector("#message-input").value === "Draft must disappear after quitting"), "full chat recovers shared draft");
   await screenshot(quick, "quick-input");
+  const beforeSecondInstance = (await evaluate(pet, () => window.desktopPet.getChatState())).draft;
+  pet.hide();
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [__filename, ...process.argv.filter((arg)=>arg === "--no-sandbox")], {
+      env: {...process.env, PET_SMOKE_PHASE:"second-instance"}, stdio:["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    const collect = (data) => { output = (output + data.toString()).slice(-3000); };
+    child.stdout.on("data", collect); child.stderr.on("data", collect);
+    const timeout = setTimeout(() => { child.kill(); reject(new Error("Second instance did not exit")); }, 15000);
+    child.on("error", (error) => { clearTimeout(timeout); reject(error); });
+    child.on("exit", (code) => { clearTimeout(timeout); if (code === 0) resolve(); else reject(new Error(`Second instance exited ${code}: ${output}`)); });
+  });
+  await until(() => pet.isVisible(), "second launch reveals the existing pet");
+  assert.deepEqual((await evaluate(pet, () => window.desktopPet.getChatState())).draft, beforeSecondInstance);
+  const finalArea = screen.getDisplayMatching(pet.getBounds()).workArea;
+  pet.setPosition(finalArea.x + 83, finalArea.y + 61);
+  await delay(600);
+  const savedPlacement = JSON.parse(fs.readFileSync(path.join(dataDir, "window-placement.json"), "utf8"));
+  assert.deepEqual(restorePlacement(savedPlacement, {width:320,height:472}, [finalArea], finalArea), pet.getBounds());
+  fs.writeFileSync(path.join(dataDir, "expected-pet-bounds.json"), JSON.stringify(pet.getBounds()));
+  assert.deepEqual(Object.keys(savedPlacement).sort(), ["area","bottom","center","version"]);
   for (const window of [pet, settings, chat, quick]) {
     assert.deepEqual(await evaluate(window, () => window.smokeErrors), []);
   }
-  console.log("Electron smoke PASS: startup, canvas, resizing, drafts, validation, settings tabs, streaming, stop, long replies, bubble selection/pin/dismiss/recall, relationship settings, shared memory save/context/disable/delete, touch responses, manual drag restoration, conversation holds, deferred reminders, context isolation, languages, click-only, voice lifecycle/GET/playback errors, import/preview/remove and optional history.");
+  console.log("Electron smoke PASS: startup, canvas, resizing, position recovery, single instance, drafts, validation, settings tabs, streaming, stop, long replies, bubble selection/pin/dismiss/recall, relationship settings, shared memory save/context/disable/delete, touch responses, manual drag restoration, conversation holds, deferred reminders, context isolation, languages, click-only, voice lifecycle/GET/playback errors, import/preview/remove and optional history.");
 }
 
 const watchdog = setTimeout(() => { console.error("Electron smoke timed out"); app.exit(1); }, 120000);

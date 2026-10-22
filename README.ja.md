@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.3 吹き出しの改善：**文字選択、返事の固定、その場での返信、前の返事の再表示に対応しました。[更新内容](docs/releases/v0.4.3.md)。[0.4.1 の安全性修正と TTS 互換性の変更](docs/releases/v0.4.1.md)も含みます。
+**0.4.4 デスクトップ操作の改善：**ペットの位置を記憶し、画面構成の変更に対応。メニューバーやシステムトレイからペットを表示できます。[更新内容](docs/releases/v0.4.4.md)。[0.4.3 の吹き出し操作](docs/releases/v0.4.3.md)と [0.4.1 の安全性修正](docs/releases/v0.4.1.md)も含みます。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
@@ -77,6 +77,14 @@ macOS で開発元を確認できないと表示された場合は、app を右�
   - システム音声、ローカル GPT-SoVITS 推論サービス、またはカスタム音声APIで返信を読み上げ
 - 設定はローカルに保存
 - GitHub Actions で Windows / macOS / Linux のパッケージをビルドし、latest release を更新
+
+## 位置の保存と再表示
+
+ペットを好きな場所へドラッグすると、再起動後もその位置に戻ります。ディスプレイの取り外しや作業領域の変更時には、利用できる画面内へ移動し、クイック入力も追従します。小さな画面では選択したサイズ設定を保ったまま、一時的に小さく表示します。
+
+macOS のメニューバー、Windows/Linux のシステムトレイにある Desktop Pet アイコンから、ペットの再表示、位置のリセット、チャット、設定、終了を選べます。起動中にもう一度アプリを開くと、二重起動せずに今のペットを表示します。Linux のトレイ表示やウィンドウ配置はデスクトップ環境に依存し、Wayland では位置の変更が制限される場合があります。
+
+位置情報は会話データとは別に端末内に保存され、チャット・音声サービスには送信されません。ディスプレイ名やハードウェア識別子も記録しません。
 
 ## ソースから実行
 

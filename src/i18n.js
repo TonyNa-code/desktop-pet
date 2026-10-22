@@ -136,6 +136,7 @@
       "menu.chatSettings": "对话设置",
       "menu.language": "语言",
       "menu.resetPosition": "回到屏幕右下角",
+      "menu.showPet": "找回桌宠",
       "menu.quit": "退出",
 
       "notify.time": "现在是 {time}",
@@ -480,6 +481,7 @@
       "menu.chatSettings": "Chat Settings",
       "menu.language": "Language",
       "menu.resetPosition": "Reset To Bottom Right",
+      "menu.showPet": "Show Pet",
       "menu.quit": "Quit",
 
       "notify.time": "It is {time} now.",
@@ -824,6 +826,7 @@
       "menu.chatSettings": "会話設定",
       "menu.language": "言語",
       "menu.resetPosition": "右下に戻す",
+      "menu.showPet": "ペットを表示",
       "menu.quit": "終了",
 
       "notify.time": "現在時刻は {time} です。",
