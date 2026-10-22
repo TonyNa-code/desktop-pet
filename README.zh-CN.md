@@ -4,6 +4,8 @@
 
 **0.4.5 桌面体验更新：**记住桌宠位置，可从菜单栏或系统托盘找回桌宠；取消退出时保留所有窗口。[更新说明](docs/releases/v0.4.5.md)。包含 [0.4.3 气泡交互](docs/releases/v0.4.3.md)与 [0.4.1 安全修复](docs/releases/v0.4.1.md)。
 
+本地 **Live2D 预览功能**正在独立测试，尚未包含在正式发布版中。[模型导入、兼容性与许可说明](docs/live2d.md#简体中文)。
+
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)

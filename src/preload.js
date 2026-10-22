@@ -1,7 +1,17 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("desktopPet", {
+  setCompanionInputOpen: (open) => ipcRenderer.invoke("set-companion-input-open", open),
   getAppState: () => ipcRenderer.invoke("get-app-state"),
+  getLive2DRuntime: () => ipcRenderer.invoke("get-live2d-runtime"),
+  importLive2DRuntime: () => ipcRenderer.invoke("import-live2d-runtime"),
+  openLive2DDownload: () => ipcRenderer.send("open-live2d-download"),
+  performModelAction: (action) => ipcRenderer.invoke("perform-model-action", action),
+  onModelAction: (callback) => {
+    const listener = (_event, action) => callback(action);
+    ipcRenderer.on("model-action", listener);
+    return () => ipcRenderer.off("model-action", listener);
+  },
   setSettings: (patch) => ipcRenderer.send("set-settings", patch),
   getChatState: () => ipcRenderer.invoke("get-chat-state"),
   saveChatConfig: (patch) => ipcRenderer.invoke("save-chat-config", patch),

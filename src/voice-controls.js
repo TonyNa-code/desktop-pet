@@ -16,8 +16,11 @@
     const wasNearBottom = messages && messages.scrollHeight - messages.scrollTop - messages.clientHeight < 60;
     controls.hidden = !voice.enabled || (!active && !voice.canReplay);
     document.body.classList.toggle("has-voice-controls", !controls.hidden);
-    button.textContent = t(active ? "voice.stop" : "voice.replay");
+    if (controls.dataset.compact === "true") {
+      button.querySelector("img").src = `./icons/${active ? "square" : "volume-2"}.svg`;
+    } else button.textContent = t(active ? "voice.stop" : "voice.replay");
     button.title = t(active ? "voice.stop" : "voice.replayTitle");
+    button.setAttribute("aria-label", button.title);
     button.disabled = pending || (!active && !voice.canReplay);
     status.textContent = t(active ? `voice.${voice.status}` : state.voiceError ? "voice.failed" : "voice.ready");
     if (wasNearBottom) messages.scrollTop = messages.scrollHeight;

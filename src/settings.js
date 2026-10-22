@@ -137,6 +137,7 @@ async function importCharacter(kind) {
     if (result.error) throw new Error();
     importToken = result.token;
     document.querySelector("#import-image").src = result.preview;
+    document.querySelector("#import-image").hidden = result.type === "live2d";
     document.querySelector("#import-image").alt = result.name;
     document.querySelector("#import-name").textContent = result.name;
     document.querySelector("#import-description").textContent = result.description;
@@ -440,10 +441,15 @@ function renderCharacterCards() {
     card.classList.toggle("selected", character.id === selectedCharacterId);
     card.setAttribute("aria-pressed", character.id === selectedCharacterId ? "true" : "false");
 
-    const image = document.createElement("img");
-    image.src = character.previewPath || character.spritePath || "";
-    image.alt = character.name;
-    image.loading = "lazy";
+    const image = document.createElement(character.type === "live2d" ? "span" : "img");
+    if (character.type === "live2d") {
+      image.className = "live2d-badge";
+      image.textContent = "Live2D";
+    } else {
+      image.src = character.previewPath || character.spritePath || "";
+      image.alt = character.name;
+      image.loading = "lazy";
+    }
 
     const content = document.createElement("span");
     const name = document.createElement("b");
@@ -453,7 +459,7 @@ function renderCharacterCards() {
     description.className = "description";
     description.textContent = character.description || text("settings.character.noDescription");
     meta.className = "meta";
-    meta.textContent = text("settings.character.meta", {
+    meta.textContent = character.type === "live2d" ? text("live2d.modelMeta", { count: character.expressions?.length || 0 }) : text("settings.character.meta", {
       actions: character.stateCount || 0,
       click: character.clickActionCount || 0,
     });
@@ -472,6 +478,45 @@ function renderCharacterCards() {
     characterGridEl.append(card);
   }
   document.querySelector("#remove-character").hidden = !activeCharacter.imported;
+  renderLive2D(activeCharacter);
+}
+
+function fillModelExpressions(select, names, value = -1) {
+  select.textContent = "";
+  [text("live2d.neutral"), ...names].forEach((name, index) => {
+    const option = document.createElement("option");
+    option.value = String(index - 1); option.textContent = name; select.append(option);
+  });
+  select.value = String(value);
+}
+
+function renderLive2D(character) {
+  document.querySelector("#live2d-panel").hidden = character.type !== "live2d";
+  if (character.type !== "live2d") return;
+  document.querySelector("#live2d-gaze").checked = config.persona?.live2dGaze !== false;
+  const names = character.expressions || [];
+  fillModelExpressions(document.querySelector("#live2d-expression"), names);
+  for (const mood of ["happy", "shy", "review", "failed"]) {
+    const index = config.persona?.live2dExpressions?.[mood] ?? -1;
+    fillModelExpressions(document.querySelector(`#live2d-${mood}`), names, index < names.length ? index : -1);
+  }
+  const motionSelect = document.querySelector("#live2d-motion");
+  motionSelect.textContent = "";
+  for (const [group, count] of Object.entries(character.motions || {})) {
+    for (let index = 0; index < count; index++) {
+      const option = document.createElement("option");
+      option.value = JSON.stringify({ group, index }); option.textContent = `${group} ${index + 1}`; motionSelect.append(option);
+    }
+  }
+  document.querySelector("#preview-motion").disabled = !motionSelect.options.length;
+  refreshRuntimeStatus();
+}
+
+async function refreshRuntimeStatus() {
+  try {
+    const state = await window.desktopPet.getLive2DRuntime();
+    document.querySelector("#live2d-runtime-status").textContent = text(state.ready ? "live2d.runtimeReady" : "live2d.runtimeNeeded");
+  } catch { document.querySelector("#live2d-runtime-status").textContent = text("live2d.runtimeFailed"); }
 }
 
 function renderConfig(preserveDraft = false) {
@@ -644,6 +689,9 @@ function readConfigForm(includeEmptyKey = false) {
     speakingStyle: personaSpeakingStyleEl.value.trim(),
     background: personaBackgroundEl.value.trim(),
     extraRules: personaExtraRulesEl.value.trim(),
+    live2dGaze: document.querySelector("#live2d-gaze").checked,
+    live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) =>
+      [mood, Number(document.querySelector(`#live2d-${mood}`).value || -1)])),
   };
   const affection = {
     enabled: affectionEnabledEl.checked,
@@ -901,6 +949,27 @@ window.addEventListener("beforeunload", (event) => {
 });
 document.querySelector("#import-folder").addEventListener("click", () => importCharacter("folder"));
 document.querySelector("#import-zip").addEventListener("click", () => importCharacter("zip"));
+document.querySelector("#import-live2d").addEventListener("click", () => importCharacter("live2d"));
+document.querySelector("#download-core").addEventListener("click", () => window.desktopPet.openLive2DDownload());
+document.querySelector("#import-core").addEventListener("click", async () => {
+  try {
+    const result = await window.desktopPet.importLive2DRuntime();
+    if (result.cancelled) return;
+    if (!result.ok) throw new Error();
+    await refreshRuntimeStatus();
+  } catch { document.querySelector("#live2d-runtime-status").textContent = text("live2d.runtimeFailed"); }
+});
+document.querySelector("#preview-expression").addEventListener("click", async () => {
+  try { await window.desktopPet.performModelAction({ type: "expression", index: Number(document.querySelector("#live2d-expression").value) }); }
+  catch { document.querySelector("#live2d-action-status").textContent = text("live2d.actionFailed"); }
+});
+document.querySelector("#preview-motion").addEventListener("click", async () => {
+  try {
+    const action = JSON.parse(document.querySelector("#live2d-motion").value);
+    const result = await window.desktopPet.performModelAction({ type: "motion", ...action });
+    document.querySelector("#live2d-action-status").textContent = result ? "" : text("live2d.actionFailed");
+  } catch { document.querySelector("#live2d-action-status").textContent = text("live2d.actionFailed"); }
+});
 document.querySelector("#cancel-import").addEventListener("click", () => { importToken = null; document.querySelector("#import-preview").hidden = true; });
 document.querySelector("#confirm-import").addEventListener("click", async () => {
   try {

@@ -275,7 +275,7 @@ async function run() {
   });
   await until(() => evaluate(chat, async () => (await window.desktopPet.getChatState()).config.memory.notes.length === 1), "memory ready for restart");
 
-  await evaluate(pet, () => document.querySelector("#talk").click());
+  await evaluate(pet, () => window.desktopPet.openQuickChatWindow());
   let quick = await findWindow("quick-chat.html");
   assert.equal(await evaluate(quick, () => document.querySelector("#character-name").textContent), "Test Character");
   const draftText = "An unsent thought\nA second line";
@@ -443,7 +443,8 @@ async function run() {
   await evaluate(pet, () => document.querySelector("#bubble-history").click());
   await until(() => chat.isVisible(), "bubble opens history");
   await evaluate(pet, () => document.querySelector("#bubble-reply").click());
-  await until(() => quick.isVisible(), "bubble opens quick reply");
+  await until(() => evaluate(pet, () => !document.querySelector("#companion-input").hidden), "bubble opens inline reply");
+  await evaluate(pet, () => document.querySelector("#companion-close").click());
   const beforeRecallRequests = requests.length;
   const beforeRecallHistory = (await evaluate(pet, () => window.desktopPet.getChatState())).history;
   await evaluate(pet, () => document.querySelector("#bubble-dismiss").click());
@@ -561,7 +562,7 @@ async function run() {
   assert.equal(await evaluate(pet, () => bubbleVisible), true);
   for (const window of [pet, chat, quick]) {
     assert.equal(await evaluate(window, () => document.querySelector("#voice-controls").hidden), false);
-    assert.equal(await evaluate(window, () => document.querySelector("#voice-toggle").textContent), "Replay");
+    assert.equal(await evaluate(window, () => document.querySelector("#voice-toggle").getAttribute("aria-label")), "Read the latest reply again with the current voice service");
   }
   const beforeReplay = requests.length;
   await evaluate(quick, () => { document.querySelector("#voice-toggle").click(); document.querySelector("#voice-toggle").click(); });

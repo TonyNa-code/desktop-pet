@@ -37,13 +37,14 @@ test("draft edit broadcasts are bounded and acknowledge the originating composer
   app.run(`globalThis.sent = []; globalThis.sender = {send:(topic,state)=>sent.push({topic,state})};
     chatWindow = {isDestroyed:()=>false,webContents:sender};
     quickChatWindow = {isDestroyed:()=>false,webContents:{send:(topic,state)=>sent.push({topic,state})}};
-    mainWindow = {webContents:{send:()=>sent.push("pet")}};
+    mainWindow = {isDestroyed:()=>false,webContents:{send:(topic,state)=>sent.push({topic,state})}};
     setChatDraft({sender},{characterId:"default",revision:0,text:"x".repeat(1500),edit:1});`);
-  assert.equal(app.run("sent.length"), 2);
+  assert.equal(app.run("sent.length"), 3);
   assert.equal(app.run("sent[0].state.text.length"), 1200);
   assert.equal(app.run("sent[0].topic"), "chat-draft-updated");
-  assert.equal(app.run("sent[0].state.acknowledgedEdit"), 1);
-  assert.equal(app.run("sent[1].state.acknowledgedEdit"), undefined);
+  assert.equal(app.run("sent[0].state.acknowledgedEdit"), undefined);
+  assert.equal(app.run("sent[1].state.acknowledgedEdit"), 1);
+  assert.equal(app.run("sent[2].state.acknowledgedEdit"), undefined);
 });
 
 for (const file of files) {

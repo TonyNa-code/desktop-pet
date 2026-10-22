@@ -330,3 +330,13 @@ button:focus-visible { outline: 2px solid #316e74; outline-offset: 2px; }
 #import-preview { border-left: 3px solid #316e74; padding: 12px; }
 #import-status { font-size: 12px; }
 .settings-footer div { flex-shrink: 0; }
+.live2d-badge {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  min-height: 90px;
+  color: #286770;
+  background: #eff8f8;
+  font-size: 14px;
+  border-radius: 4px;
+}

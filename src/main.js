@@ -10,6 +10,9 @@ const {
   dialog,
   Tray,
   powerMonitor,
+  protocol,
+  session,
+  shell,
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -23,10 +26,15 @@ const { normalizePlacement, fitBounds, capturePlacement, defaultBounds, restoreP
 const { modelsEndpoint, readModelList } = require("./model-list");
 const { readPack, installPack } = require("./character-import");
 const { pathToFileURL } = require("node:url");
+const { readLive2DPack, installLive2DPack } = require("./live2d-import");
+const live2dHost = require("./live2d-host");
+
+protocol?.registerSchemesAsPrivileged([{ scheme: "pet-live2d", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 
 const BASE_SIZE = { width: 192, height: 208 };
 const BUBBLE_HEIGHT = 160;
 const MIN_BUBBLE_WIDTH = 320;
+let companionInputOpen = false;
 const DEFAULT_CHARACTER_ID = "default";
 const CHARACTERS_DIR = path.join(__dirname, "..", "assets", "characters");
 const SIZE_PRESETS = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -245,26 +253,52 @@ function importedCharactersDir() { return path.join(app.getPath("userData"), "ch
 
 async function previewCharacterImport(event, kind) {
   const owner = BrowserWindow.fromWebContents(event.sender);
+  const live2d = kind === "live2d";
   const result = await dialog.showOpenDialog(owner, kind === "folder"
     ? { properties: ["openDirectory"] }
-    : { properties: ["openFile"], filters: [{ name: "ZIP", extensions: ["zip"] }] });
+    : { properties: ["openFile"], filters: [{ name: live2d ? "Live2D" : "ZIP", extensions: live2d ? ["json", "zip"] : ["zip"] }] });
   if (result.canceled || !result.filePaths.length) return { cancelled: true };
   try {
-    const pack = readPack(result.filePaths[0], (bytes) => !nativeImage.createFromBuffer(bytes).isEmpty());
+    const pack = (live2d ? readLive2DPack : readPack)(result.filePaths[0], (bytes) => !nativeImage.createFromBuffer(bytes).isEmpty());
     const token = require("node:crypto").randomUUID();
     pendingImport = { pack, token, sender: event.sender.id, expires: Date.now() + 600000 };
-    return { token, name: pack.manifest.name, description: pack.manifest.description,
-      preview: `data:image/png;base64,${pack.files[pack.manifest.preview].toString("base64")}` };
+    return { token, name: pack.manifest.name, description: pack.manifest.description, type: pack.manifest.type || "sprite",
+      preview: live2d ? "" : `data:image/png;base64,${pack.files[pack.manifest.preview].toString("base64")}` };
   } catch { return { error: "invalid_pack" }; }
 }
 
 function confirmCharacterImport(event, token) {
   if (!pendingImport || pendingImport.token !== token || pendingImport.sender !== event.sender.id || pendingImport.expires < Date.now()) return { error: "expired" };
   try {
-    installPack(pendingImport.pack, importedCharactersDir());
+    (pendingImport.pack.manifest.type === "live2d" ? installLive2DPack : installPack)(pendingImport.pack, importedCharactersDir());
     pendingImport = null;
     return { ok: true, ...chatState() };
   } catch { return { error: "import_failed" }; }
+}
+
+async function importLive2DRuntime(event) {
+  const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    properties: ["openFile"], filters: [{ name: "Cubism Core", extensions: ["js"] }],
+  });
+  if (result.canceled || !result.filePaths.length) return { cancelled: true };
+  try {
+    live2dHost.installCore(result.filePaths[0], app.getPath("userData"));
+    mainWindow?.webContents.send("app-state-updated", appState());
+    return { ok: true };
+  } catch { return { error: "invalid_runtime" }; }
+}
+
+function performModelAction(_event, action) {
+  const pack = getCharacterPack();
+  if (pack?.type !== "live2d" || !mainWindow || !action) return false;
+  if (action.type === "motion" && settings.expressionMode === "clickOnly") return false;
+  const valid = action.type === "expression"
+    ? Number.isInteger(action.index) && action.index >= -1 && action.index < pack.expressions.length
+    : action.type === "motion" && Object.hasOwn(pack.motions, action.group)
+      && Number.isInteger(action.index) && action.index >= 0 && action.index < pack.motions[action.group];
+  if (!valid) return false;
+  mainWindow.webContents.send("model-action", { type: action.type, index: action.index, group: action.group, id: pack.id });
+  return true;
 }
 
 async function removeCharacterImport(event, id) {
@@ -418,6 +452,16 @@ function listCharacterPacks() {
       try {
         const root = path.join(importedCharactersDir(), id);
         const raw = JSON.parse(fs.readFileSync(path.join(root, "character.json"), "utf8"));
+        if (raw.type === "live2d") {
+          if (raw.model !== "model.model3.json" || !Array.isArray(raw.resources)) return null;
+          return { id, type: "live2d", name: String(raw.name || "Character").slice(0, 80), description: "", imported: true,
+            frame: { width: 768, height: 832 }, columns: 1,
+            states: Object.fromEntries(["idle", "happy", "shy", "review", "failed", "waving"].map((key) => [key, { row: 0, frames: 1, interval: 1000 }])),
+            automaticActions: [], clickActions: [], staticExpressions: [],
+            expressions: Array.isArray(raw.expressions) ? raw.expressions.slice(0, 64).map((name) => String(name).slice(0, 80)) : [],
+            motions: raw.motions && typeof raw.motions === "object" ? raw.motions : {},
+          };
+        }
         const pack = normalizeCharacterPack(raw, id);
         return { ...pack, id, imported: true, absoluteSpritePath: path.join(root, raw.sprite),
           spritePath: pathToFileURL(path.join(root, raw.sprite)).href,
@@ -688,6 +732,11 @@ function normalizePersonaSettings(rawPersona = {}) {
     speakingStyle: normalizeLongText(raw.speakingStyle, 1200),
     background: normalizeLongText(raw.background, 1600),
     extraRules: normalizeLongText(raw.extraRules, 1600),
+    live2dGaze: raw.live2dGaze !== false,
+    live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((key) => {
+      const value = raw.live2dExpressions?.[key];
+      return [key, Number.isInteger(value) && value >= 0 && value < 64 ? value : -1];
+    })),
   };
 }
 
@@ -782,7 +831,7 @@ function nearestScale(scale) {
 function displaySize(scale = settings.scale) {
   return {
     width: Math.max(MIN_BUBBLE_WIDTH, Math.round(BASE_SIZE.width * scale)),
-    height: Math.round(BASE_SIZE.height * scale) + BUBBLE_HEIGHT,
+    height: Math.round(BASE_SIZE.height * scale) + BUBBLE_HEIGHT + (companionInputOpen ? 88 : 0),
   };
 }
 
@@ -794,6 +843,14 @@ function applyWindowSize(keepCenter = true) {
   const y = bounds.y + bounds.height - nextSize.height;
   const area = screen.getDisplayMatching(bounds).workArea;
   mainWindow.setBounds(fitBounds({ x, y, ...nextSize }, area));
+}
+
+function setCompanionInputOpen(event, open) {
+  if (event.sender !== mainWindow?.webContents) return false;
+  companionInputOpen = open === true;
+  applyWindowSize();
+  if (companionInputOpen) { mainWindow.show(); mainWindow.focus(); }
+  return companionInputOpen;
 }
 
 function createWindow() {
@@ -818,10 +875,11 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
+  protectWindow(mainWindow, "index.html");
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   enableInputMenu(mainWindow);
   mainWindow.loadFile(path.join(__dirname, "index.html"));
@@ -832,6 +890,18 @@ function createWindow() {
   petPlacement = capturePlacement(mainWindow.getBounds(), screen.getDisplayMatching(mainWindow.getBounds()).workArea);
   mainWindow.webContents.on("render-process-gone", () => stopVoice());
   mainWindow.webContents.on("did-start-loading", () => stopVoice());
+}
+
+function protectWindow(window, page) {
+  const localUrl = pathToFileURL(path.join(__dirname, page)).href;
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event, url) => { if (url !== localUrl) event.preventDefault(); });
+  window.webContents.on("will-frame-navigate", (event) => {
+    const allowed = event.isMainFrame ? event.url === localUrl
+      : page === "index.html" && event.url === `${live2dHost.ORIGIN}/index.html`;
+    if (!allowed) event.preventDefault();
+  });
+  window.webContents.on("will-attach-webview", (event) => event.preventDefault());
 }
 
 function enableInputMenu(window) {
@@ -876,10 +946,11 @@ function createChatWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
+  protectWindow(chatWindow, "chat.html");
   chatWindow.loadFile(path.join(__dirname, "chat.html"));
   enableInputMenu(chatWindow);
   chatWindow.once("ready-to-show", () => chatWindow.show());
@@ -910,10 +981,11 @@ function createQuickChatWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
+  protectWindow(quickChatWindow, "quick-chat.html");
   quickChatWindow.loadFile(path.join(__dirname, "quick-chat.html"));
   enableInputMenu(quickChatWindow);
   quickChatWindow.once("ready-to-show", () => quickChatWindow.show());
@@ -942,10 +1014,11 @@ function createCompanionSettingsWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
+  protectWindow(companionSettingsWindow, "settings.html");
   companionSettingsWindow.loadFile(path.join(__dirname, "settings.html"));
   enableInputMenu(companionSettingsWindow);
   companionSettingsWindow.once("ready-to-show", () => companionSettingsWindow.show());
@@ -1255,6 +1328,9 @@ function chatState() {
     automaticActionCount: pack.automaticActions.length,
     clickActionCount: pack.clickActions.length,
     imported: pack.imported === true,
+    type: pack.type || "sprite",
+    expressions: pack.expressions || [],
+    motions: pack.motions || {},
   }));
   return {
     language: settings.language,
@@ -1298,7 +1374,7 @@ function setChatDraft(event, draft = {}) {
   else chatDrafts.delete(settings.characterId);
   chatDraftVersion += 1;
   // Mirror edits between composers without persisting unsent text.
-  for (const window of [chatWindow, quickChatWindow]) {
+  for (const window of [mainWindow, chatWindow, quickChatWindow]) {
     if (window && !window.isDestroyed()) {
       window.webContents.send("chat-draft-updated", { ...chatDraftState(),
         acknowledgedEdit: window.webContents === event?.sender ? draft.edit : undefined });
@@ -2095,44 +2171,62 @@ else {
 
 if (ownsInstance) app.whenReady().then(() => {
   app.setName(t("app.name"));
+  protocol.handle("pet-live2d", live2dHost.createModelHandler({ userData: app.getPath("userData"), sourceDir: __dirname, getActiveCharacter: getCharacterPack }));
+  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
   createWindow();
 
-  ipcMain.handle("get-app-state", () => appState());
-  ipcMain.handle("get-chat-state", () => chatState());
-  ipcMain.handle("save-chat-config", (_event, patch) => applyChatConfigPatch(patch));
-  ipcMain.handle("test-assistant-connection", testAssistantConnection);
-  ipcMain.handle("list-assistant-models", listAssistantModels);
-  ipcMain.handle("test-tts-connection", testTtsConnection);
-  ipcMain.handle("send-chat-message", sendChatMessage);
-  ipcMain.handle("clear-chat-history", clearChatHistory);
-  ipcMain.handle("stop-chat", stopChat);
-  ipcMain.on("set-chat-draft", setChatDraft);
-  ipcMain.handle("confirm-discard", confirmDiscard);
-  ipcMain.on("confirm-app-quit", confirmAppQuit);
-  ipcMain.handle("preview-character-import", previewCharacterImport);
-  ipcMain.handle("confirm-character-import", confirmCharacterImport);
-  ipcMain.handle("remove-character-import", removeCharacterImport);
-  ipcMain.handle("begin-speech", beginSpeech);
-  ipcMain.on("speech-state-changed", speechStateChanged);
-  ipcMain.handle("stop-voice", stopVoice);
-  ipcMain.handle("replay-speech", replaySpeech);
-  ipcMain.handle("show-last-reply", showLastReply);
-  ipcMain.handle("synthesize-speech", synthesizeSpeech);
-  ipcMain.on("set-settings", (_event, patch) => updateSettings(patch));
-  ipcMain.on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));
-  ipcMain.on("present-notification", (event, notice) => {
+  // Only our top-level local windows may invoke the preload bridge.
+  const trusted = (event) => [mainWindow, chatWindow, quickChatWindow, companionSettingsWindow].some((window) =>
+    window && !window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame
+      && ["index.html", "chat.html", "quick-chat.html", "settings.html"].some((page) => event.senderFrame.url === pathToFileURL(path.join(__dirname, page)).href));
+  const handle = (channel, callback) => ipcMain.handle(channel, (event, ...args) => {
+    if (!trusted(event)) throw new Error("Unauthorized window");
+    return callback(event, ...args);
+  });
+  const on = (channel, callback) => ipcMain.on(channel, (event, ...args) => { if (trusted(event)) callback(event, ...args); });
+  handle("get-live2d-runtime", () => ({ ready: live2dHost.runtimeReady(app.getPath("userData")) }));
+  handle("import-live2d-runtime", importLive2DRuntime);
+  handle("perform-model-action", performModelAction);
+  on("open-live2d-download", () => { shell.openExternal(live2dHost.CORE_URL).catch(() => {}); });
+
+  handle("get-app-state", () => appState());
+  handle("get-chat-state", () => chatState());
+  handle("set-companion-input-open", setCompanionInputOpen);
+  handle("save-chat-config", (_event, patch) => applyChatConfigPatch(patch));
+  handle("test-assistant-connection", testAssistantConnection);
+  handle("list-assistant-models", listAssistantModels);
+  handle("test-tts-connection", testTtsConnection);
+  handle("send-chat-message", sendChatMessage);
+  handle("clear-chat-history", clearChatHistory);
+  handle("stop-chat", stopChat);
+  on("set-chat-draft", setChatDraft);
+  on("confirm-app-quit", confirmAppQuit);
+  handle("confirm-discard", confirmDiscard);
+  handle("preview-character-import", previewCharacterImport);
+  handle("confirm-character-import", confirmCharacterImport);
+  handle("remove-character-import", removeCharacterImport);
+  handle("begin-speech", beginSpeech);
+  on("speech-state-changed", speechStateChanged);
+  handle("stop-voice", stopVoice);
+  handle("replay-speech", replaySpeech);
+  handle("show-last-reply", showLastReply);
+  handle("synthesize-speech", synthesizeSpeech);
+  on("set-settings", (_event, patch) => updateSettings(patch));
+  on("record-interaction", (_event, kind) => updateMoodFromInteraction(kind));
+  on("present-notification", (event, notice) => {
     if (event.sender !== mainWindow?.webContents || !Notification.isSupported()) return;
     const title = normalizeCompactText(notice?.title, 120);
     const body = normalizeLongText(notice?.body, 600);
     if (title || body) new Notification({ title, body, silent: true }).show();
   });
-  ipcMain.on("open-chat-window", createChatWindow);
-  ipcMain.on("open-quick-chat-window", createQuickChatWindow);
-  ipcMain.on("open-companion-settings", createCompanionSettingsWindow);
-  ipcMain.on("show-context-menu", showContextMenu);
-  ipcMain.on("drag-start", beginDrag);
-  ipcMain.handle("drag-move", moveDrag);
-  ipcMain.on("drag-end", endDrag);
+  on("open-chat-window", createChatWindow);
+  on("open-quick-chat-window", createQuickChatWindow);
+  on("open-companion-settings", createCompanionSettingsWindow);
+  on("show-context-menu", showContextMenu);
+  on("drag-start", beginDrag);
+  handle("drag-move", moveDrag);
+  on("drag-end", endDrag);
 
   if (process.platform === "darwin") {
     app.dock.hide();

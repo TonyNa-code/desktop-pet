@@ -2,6 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; media-src data: blob:; frame-src pet-live2d:; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Desktop Pet</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -19,18 +20,33 @@
         </div>
         <div id="speech-bubble" tabindex="0" role="region" aria-live="polite"></div>
       </div>
-      <div id="voice-controls" class="voice-controls" hidden>
-        <span id="voice-status" role="status"></span>
-        <button id="voice-toggle" type="button"></button>
-      </div>
     </div>
+    <div id="model-stage" hidden></div>
+    <button id="model-status" type="button" hidden></button>
     <canvas id="pet" width="768" height="832" aria-label="Desktop pet"></canvas>
     <div id="pet-controls">
+      <div id="voice-controls" class="voice-controls" data-compact="true" hidden>
+        <span id="voice-status" role="status"></span>
+        <button id="voice-toggle" class="icon-button" type="button"><img src="./icons/volume-2.svg" alt="" /></button>
+      </div>
+      <span id="companion-presence" role="status" hidden><i></i><i></i><i></i></span>
+      <button id="companion-stop" class="icon-button" type="button" hidden><img src="./icons/x.svg" alt="" /></button>
       <button id="last-reply" class="icon-button" type="button" disabled><img src="./icons/history.svg" alt="" /></button>
-      <button id="talk" type="button">对话</button>
+      <button id="talk" class="icon-button" type="button" aria-expanded="false" aria-controls="companion-input"><img src="./icons/message-square.svg" alt="" /></button>
     </div>
+    <form id="companion-input" hidden>
+      <textarea id="companion-text" rows="2" maxlength="1200"></textarea>
+      <div class="companion-input-actions">
+        <button id="companion-close" class="icon-button" type="button"><img src="./icons/x.svg" alt="" /></button>
+        <button id="companion-send" class="icon-button" type="submit"><img src="./icons/arrow-down.svg" alt="" /></button>
+      </div>
+      <span id="companion-feedback" role="status" hidden></span>
+    </form>
     <script src="./i18n.js"></script>
     <script src="./speech-text.js"></script>
+    <script src="./chat-draft.js"></script>
+    <script src="./companion-input.js"></script>
+    <script src="./live2d-bridge.js"></script>
     <script src="./renderer.js"></script>
     <script src="./voice-controls.js"></script>
   </body>

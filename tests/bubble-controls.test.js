@@ -78,7 +78,8 @@ test("mouse focus does not keep an unpinned reply open after the pointer leaves"
 
 test("reply, history and recall controls are separate and labels are translated", () => {
   const calls = [];
-  const pet = loadPet({ openQuickChatWindow: () => calls.push("quick"), openChatWindow: () => calls.push("history"), showLastReply: () => calls.push("recall") });
+  const pet = loadPet({ openChatWindow: () => calls.push("history"), showLastReply: () => calls.push("recall") });
+  pet.context.window.DesktopPetCompanionInput = { open: () => calls.push("inline") };
   assert.equal(pet.bubble.events.click, undefined);
   for (const language of ["en-US", "zh-CN", "ja-JP"]) {
     pet.run(`activeLanguage = ${JSON.stringify(language)}; updateBubbleControls()`);
@@ -90,7 +91,7 @@ test("reply, history and recall controls are separate and labels are translated"
     }
   }
   for (const id of ["bubble-reply", "bubble-history", "last-reply"]) pet.nodes.get(`#${id}`).events.click();
-  assert.deepEqual(calls, ["quick", "history", "recall"]);
+  assert.deepEqual(calls, ["inline", "history", "recall"]);
 });
 
 test("an old initial state cannot reenable recall during a newer request", async () => {
