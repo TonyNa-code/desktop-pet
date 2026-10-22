@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { normalizePlacement, capturePlacement, restorePlacement, fitBounds, defaultBounds } = require("../src/window-placement");
 const { loadMain } = require("./helpers");
 const { loadPet } = require("./pet-helpers");
@@ -7,6 +8,7 @@ const { loadPet } = require("./pet-helpers");
 const primary = { x: 0, y: 24, width: 1440, height: 876 };
 const secondary = { x: -1920, y: -160, width: 1920, height: 1080 };
 const size = { width: 320, height: 472 };
+const placementFile = path.join("test-user-data", "window-placement.json");
 function inside(bounds, area) {
   assert.ok(bounds.x >= area.x && bounds.y >= area.y);
   assert.ok(bounds.x + bounds.width <= area.x + area.width);
@@ -74,12 +76,12 @@ function placementApp(overrides = {}) {
 test("placement saves are isolated, coalesced and survive a restart", () => {
   const app = placementApp();
   app.run("savePlacement()");
-  const first = app.writes.get("test-user-data/window-placement.json");
+  const first = app.writes.get(placementFile);
   assert.equal(app.writes.size, 1);
   app.writes.clear();
   app.run("savePlacement()");
   assert.equal(app.writes.size, 0);
-  app.writes.set("test-user-data/window-placement.json", first);
+  app.writes.set(placementFile, first);
   app.run("petPlacement = null; readPlacement(); bounds = {...bounds,x:9999}; restorePetPlacement()");
   assert.equal(app.run("bounds.x"), 100);
   assert.equal(app.run("bounds.y"), 200);
@@ -92,13 +94,13 @@ test("failed placement saves leave other files intact and can be retried", () =>
     app.writes.set(to, app.writes.get(from)); app.writes.delete(from);
   } } });
   app.run("savePlacement()");
-  const saved = app.writes.get("test-user-data/window-placement.json");
+  const saved = app.writes.get(placementFile);
   fail = true;
   app.run("bounds.x = 250; savePlacement()");
-  assert.equal(app.writes.get("test-user-data/window-placement.json"), saved);
+  assert.equal(app.writes.get(placementFile), saved);
   fail = false;
   app.run("savePlacement()");
-  assert.notEqual(app.writes.get("test-user-data/window-placement.json"), saved);
+  assert.notEqual(app.writes.get(placementFile), saved);
 });
 
 test("display event bursts cancel pending position saves and recover once from the settled position", () => {
@@ -177,11 +179,11 @@ test("quitting flushes a recent move even before the debounce timer fires", () =
   app.run("windowMoved(); bounds.x = 230");
   events["before-quit"]();
   assert.equal(timers.size, 0);
-  const saved = JSON.parse(app.writes.get("test-user-data/window-placement.json"));
+  const saved = JSON.parse(app.writes.get(placementFile));
   assert.equal(restorePlacement(saved, size, [primary], primary).x, 230);
   // A cancelled quit must not disable later position saves.
   app.run("bounds.x = 280; windowMoved()");
   assert.equal(timers.size, 1);
   [...timers.values()][0]();
-  assert.equal(restorePlacement(JSON.parse(app.writes.get("test-user-data/window-placement.json")), size, [primary], primary).x, 280);
+  assert.equal(restorePlacement(JSON.parse(app.writes.get(placementFile)), size, [primary], primary).x, 280);
 });

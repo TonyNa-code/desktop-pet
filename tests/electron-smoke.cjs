@@ -96,8 +96,9 @@ async function screenshot(window, name) {
 async function run() {
   if (process.env.PET_SMOKE_PHASE === "second-instance") {
     require("../src/main.js");
-    await app.whenReady();
-    throw new Error("A second instance unexpectedly started");
+    assert.equal(app.hasSingleInstanceLock(), false, "A second instance acquired the profile lock");
+    // Quit may finish after ready on Linux; the parent verifies the natural exit.
+    await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Second instance did not quit")), 5000));
   }
   if (process.env.PET_SMOKE_PHASE === "restart") {
     require("../src/main.js");
