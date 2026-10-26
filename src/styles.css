@@ -155,6 +155,7 @@ body[data-companion-open="true"] #speech-panel { bottom: calc(var(--pet-height, 
   pointer-events: auto;
 }
 #last-reply { width: 30px; height: 30px; background: rgba(255, 255, 255, 0.95); border-radius: 6px; }
+#pet-menu { width: 30px; height: 30px; background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(49, 110, 116, 0.25); border-radius: 6px; }
 #last-reply:disabled { visibility: hidden; }
 #talk {
   width: 32px;

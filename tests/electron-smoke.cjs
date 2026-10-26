@@ -66,6 +66,16 @@ const server = http.createServer((req, res) => {
 });
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function menuFromButton(pet) {
+  const original = Menu.prototype.popup;
+  let menu;
+  Menu.prototype.popup = function (options) { assert.equal(options.window, pet); menu = this; };
+  try {
+    await evaluate(pet, () => document.querySelector("#pet-menu").click());
+    await until(() => menu, "visible pet menu");
+    return menu;
+  } finally { Menu.prototype.popup = original; }
+}
 async function until(check, label, timeout = 15000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -144,7 +154,7 @@ async function run() {
         console.log("Electron restart PASS: position and saved settings restored; confirmed quit exits without saving discarded edits.");
       } catch (error) { console.error(error); app.exit(1); }
     });
-    app.quit();
+    (await menuFromButton(pet)).items.find(item => item.accelerator === "CommandOrControl+Q").click();
     await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Confirmed quit did not exit")), 5000));
   }
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -153,6 +163,14 @@ async function run() {
   const pet = await findWindow("index.html");
   const settings = await findWindow("settings.html");
   const endpoint = `http://127.0.0.1:${server.address().port}`;
+  const petMenu = await menuFromButton(pet);
+  assert.ok(petMenu.items.some(item => item.accelerator === "CommandOrControl+Q"));
+  assert.equal(await evaluate(pet, () => {
+    const button = document.querySelector("#pet-menu");
+    const rect = button.getBoundingClientRect();
+    return button.getAttribute("aria-haspopup") === "menu" && !!button.title && rect.right <= innerWidth
+      && button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  }), true);
   assert.ok(Menu.getApplicationMenu().items.some((item) => item.role?.toLowerCase() === "editmenu"));
   const savedClipboard = clipboard.availableFormats().map((format) => [format, clipboard.readBuffer(format)]);
   try {
@@ -746,7 +764,7 @@ async function run() {
   let leavePrompts = 0;
   dialog.showMessageBox = async () => { leavePrompts++; return { response: 0 }; };
   await evaluate(settings, () => { document.querySelector("#persona-name").value = "Unsaved name"; });
-  app.quit();
+  (await menuFromButton(pet)).items.find(item => item.accelerator === "CommandOrControl+Q").click();
   await until(() => leavePrompts === 1, "confirm before quitting with unsaved settings");
   await delay(300);
   for (const window of [pet, settings, chat, quick]) assert.equal(window.isDestroyed(), false, "Cancelling quit keeps every window alive");

@@ -8,6 +8,7 @@ const bubblePin = document.querySelector("#bubble-pin");
 const bubbleDismiss = document.querySelector("#bubble-dismiss");
 const lastReplyButton = document.querySelector("#last-reply");
 const talkButton = document.querySelector("#talk");
+const petMenuButton = document.querySelector("#pet-menu");
 const ctx = canvas.getContext("2d", { alpha: true });
 const i18n = window.DesktopPetI18n;
 const SINGLE_CLICK_DELAY = 280;
@@ -499,7 +500,7 @@ function updateBubbleControls() {
   bubbleSpeaker.title = name;
   for (const [button, key] of [[bubbleReply, "pet.reply"], [bubbleHistory, "pet.openChat"],
     [bubblePin, bubblePinned ? "pet.unpinReply" : "pet.pinReply"], [bubbleDismiss, "pet.dismissReply"],
-    [lastReplyButton, "pet.lastReply"]]) {
+    [lastReplyButton, "pet.lastReply"], [petMenuButton, "pet.menu"]]) {
     button.title = text(key);
     button.setAttribute("aria-label", button.title);
   }
@@ -605,6 +606,7 @@ bubbleReply.addEventListener("click", () => window.DesktopPetCompanionInput?.ope
 bubbleHistory.addEventListener("click", () => window.desktopPet.openChatWindow());
 lastReplyButton.addEventListener("click", () => window.desktopPet.showLastReply());
 talkButton.addEventListener("click", () => window.DesktopPetCompanionInput?.toggle());
+petMenuButton.addEventListener("click", () => window.desktopPet.showContextMenu());
 
 function finishSpeech(token, failed = false) {
   if (token !== speechToken) return;

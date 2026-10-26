@@ -30,6 +30,8 @@ For a closer companion tone, choose **Relationship > Partner**, set your preferr
 
 The speech icon opens a small input beside the character. Enter sends your message and folds the input away; replies appear just above the character. Escape closes the input without losing its draft. The book icon opens the full conversation, sharing the same draft and history. A failed request keeps your unsent text for another attempt.
 
+The menu button beside the speech icon opens character selection, size, full chat, chat settings, and **Quit**. The same menu is available by right-clicking the character.
+
 In automatic mode, a Live2D character gently centers its gaze while you type or wait for a reply. Its own blink and breath continue; random idle gestures wait until the conversation settles. Click expression mode keeps the expression you selected. External voice playback has a compact stop/replay control beside the character.
 
 Under **Reply gestures**, you can also assign a native motion to each reply mood. All start with **No gesture**. A completed reply can play one selected motion, not one per streamed text chunk. Gestures are spaced apart during quick exchanges, and a new message interrupts the previous gesture. Starting voice playback does not cancel the current reply gesture. Click expression mode disables reply gestures.
@@ -74,6 +76,8 @@ Chat and spoken text still go to the services you explicitly configure. Returned
 
 点人物旁的对话图标即可展开小输入框，按回车发送后自动收起，回复显示在人物上方。按 Esc 可收起并保留草稿；点书本图标可看完整聊天记录，两处共用草稿。请求失败时也会保留未发送的文字。自动模式下，输入和等待回复时人物会轻轻看向你，保持眨眼、呼吸，暂缓待机动作。点击模式不改变手动选中的表情。朗读的停止、重播按钮在人物身旁。
 
+对话图标旁的菜单按钮可以切换角色、调整大小、打开完整聊天和对话设置，或选择 **退出**。右键点击人物也能打开同一个菜单。
+
 在 **回复动作** 中可以为各个情绪选择模型自带动作，默认均不播放。一条完整回复最多触发一次，逐字输出时不会重复触发；连续短回复也不会让动作连着播放。开始朗读会保留当前回复动作，发出新消息则会中止上一动作。点击表情模式不播放回复动作。
 
 支持 Cubism 3/4 导出的模型、PNG、表情、动作、物理和姿态文件。不能把一张立绘自动变成 Live2D，也不支持 Cubism 2、编辑工程 `.cmo3`、PSD、VRM 或 Cubism 5.3 的扩展混合模式。单包上限 128 MiB、256 文件、8 张纹理，单张最长边 8192，纹理总像素不超过 6400 万，单个 JSON 不超过 2 MiB。
@@ -101,6 +105,8 @@ Chat and spoken text still go to the services you explicitly configure. Returned
 **ときどき待機モーションを再生** を無効にしても、まばたき・呼吸・触れ合い・返答時の動作は続きます。視線追従と触れ合いの一言は別々に切り替えられます。触れ合いでは API を呼び出さず、好感度も増えません。
 
 キャラクター横の会話アイコンで小さな入力欄が開きます。Enter で送信すると閉じ、返答はキャラクターのすぐ上に表示されます。Esc で閉じても下書きは残ります。本のアイコンから開く会話履歴とも下書きを共有します。送信失敗時も入力内容は保持されます。自動モードでは入力中や返答待ちに視線をそっと中央に戻し、まばたきと呼吸を続けます。クリック表情モードでは選んだ表情を保ちます。音声の停止・再生はキャラクター横の小さなボタンで操作できます。
+
+会話アイコン横のメニューボタンから、キャラクター・サイズの変更、チャット画面、会話設定、**終了**を選べます。キャラクターを右クリックしても同じメニューが開きます。
 
 **返答時のモーション** では、感情ごとにモデルの動作を選べます。初期値はすべて「モーションなし」です。一つの返答につき一度だけ再生し、文字の逐次表示や短い返答の連続で動作を繰り返しません。読み上げ開始時も動作を保ち、新しいメッセージで前の動作を中断します。クリック表情モードでは再生しません。
 

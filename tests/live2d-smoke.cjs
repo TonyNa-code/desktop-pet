@@ -73,6 +73,23 @@ async function run() {
     assert.ok(frame, "isolated model frame");
     assert.equal(await frame.evaluate(() => typeof window.desktopPet), "undefined");
     assert.equal(await frame.evaluate(() => typeof window.require), "undefined");
+    await app.evaluate(({ Menu }) => {
+      globalThis.originalMenuPopup = Menu.prototype.popup;
+      Menu.prototype.popup = function () { globalThis.petMenu = this; };
+    });
+    try {
+      await pet.locator("#pet-menu").click();
+      await poll(() => app.evaluate(() => !!globalThis.petMenu), { label: "Live2D pet menu" });
+      assert.equal(await app.evaluate(() => petMenu.items.some(item => item.accelerator === "CommandOrControl+Q")), true);
+      await app.evaluate(() => petMenu.items.flatMap(item => item.submenu?.items || []).find(item => item.label === "Full Chat").click());
+      const menuChat = await find("chat.html");
+      assert.equal(await menuChat.locator("#message-input").isVisible(), true);
+      await menuChat.close();
+      await app.evaluate(() => petMenu.items.flatMap(item => item.submenu?.items || []).find(item => item.label === "Chat Settings").click());
+      assert.equal(await settings.locator("#tab-character").isVisible(), true);
+    } finally {
+      await app.evaluate(({ Menu }) => { Menu.prototype.popup = globalThis.originalMenuPopup; });
+    }
     await frame.evaluate(() => {
       window.modelCommands = [];
       window.addEventListener("message", event => { if (event.data?.channel === "desktop-pet-model") modelCommands.push(event.data.type); });

@@ -13,7 +13,7 @@ function loadPet(api = {}) {
   const events = {};
   let timerId = 0;
   const nodes = new Map();
-  for (const id of ["speech-bubble", "speech-card", "bubble-speaker", "bubble-reply", "bubble-history", "bubble-pin", "bubble-dismiss", "last-reply", "talk"]) {
+  for (const id of ["speech-bubble", "speech-card", "bubble-speaker", "bubble-reply", "bubble-history", "bubble-pin", "bubble-dismiss", "last-reply", "talk", "pet-menu"]) {
     nodes.set(`#${id}`, { textContent: "", events: {}, attributes: {},
       addEventListener(name, fn) { this.events[name] = fn; },
       setAttribute(name, value) { this.attributes[name] = value; },
@@ -43,7 +43,7 @@ function loadPet(api = {}) {
       getChatState: () => new Promise(() => {}), onChatStateUpdated() {},
       recordInteraction() {}, dragStart() {}, dragEnd() {}, beginSpeech: async () => 1,
       speechStateChanged() {}, onSpeechStopped() {}, openChatWindow() {}, openQuickChatWindow() {},
-      stopVoice() {}, showLastReply() {}, ...api },
+      stopVoice() {}, showLastReply() {}, showContextMenu() {}, ...api },
     addEventListener(name, handler) { events[name] = handler; },
     setInterval(fn) { intervals.set(++timerId, fn); return timerId; },
     clearInterval(id) { intervals.delete(id); },
