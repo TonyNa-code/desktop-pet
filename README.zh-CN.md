@@ -241,3 +241,5 @@ assets/characters/
 ## 许可证
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
+
+内置中日文备用字体采用 SIL Open Font License 1.1，详见[字体许可说明](assets/fonts/NOTICE.md)。

@@ -100,6 +100,7 @@ async function findWindow(file) {
   return window;
 }
 async function screenshot(window, name) {
+  await evaluate(window, () => document.fonts.ready.then(() => true));
   fs.mkdirSync(screenshots, { recursive: true });
   fs.writeFileSync(path.join(screenshots, `${name}.png`), (await window.webContents.capturePage()).toPNG());
 }
@@ -163,6 +164,17 @@ async function run() {
   await app.whenReady();
   const pet = await findWindow("index.html");
   const settings = await findWindow("settings.html");
+  for (const window of [pet, settings]) {
+    const loaded = await evaluate(window, async () => {
+      const results = [];
+      for (const [family, text] of [["Desktop Pet CJK SC", "角色对话"], ["Desktop Pet CJK JP", "会話かなカナ"]]) {
+        const faces = await document.fonts.load(`16px "${family}"`, text);
+        results.push(faces.length > 0 && faces.every(face => face.status === "loaded"));
+      }
+      return results;
+    });
+    assert.deepEqual(loaded, [true, true], "Bundled CJK fonts must load under the page CSP");
+  }
   const endpoint = `http://127.0.0.1:${server.address().port}`;
   const petMenu = await menuFromButton(pet);
   assert.ok(petMenu.items.some(item => item.accelerator === "CommandOrControl+Q"));

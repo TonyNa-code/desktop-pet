@@ -237,3 +237,5 @@ assets/characters/
 ## License
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
+
+同梱の中国語・日本語フォントには SIL Open Font License 1.1 が適用されます。[フォントの利用条件](assets/fonts/NOTICE.md)をご覧ください。

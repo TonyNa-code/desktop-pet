@@ -244,3 +244,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, pull request checks, and
 ## License
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
+
+Bundled Chinese and Japanese fallback fonts use the SIL Open Font License 1.1. See the [font notices](assets/fonts/NOTICE.md).
