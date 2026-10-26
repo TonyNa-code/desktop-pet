@@ -62,6 +62,22 @@ jobs:
       - name: Build
         run: npm run build -- --publish never
 
+      - name: Packaged resources smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:smoke -- --packaged --no-sandbox
+
+      - name: Packaged resources smoke test (Windows and macOS)
+        if: runner.os != 'Linux'
+        run: npm run test:smoke -- --packaged
+
+      - name: Upload packaged smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-packaged-${{ runner.os }}
+          path: out/smoke-packaged/*.png
+          if-no-files-found: ignore
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

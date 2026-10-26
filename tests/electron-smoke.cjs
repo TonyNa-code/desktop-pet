@@ -5,10 +5,11 @@ const os = require("node:os");
 const path = require("node:path");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
-const { restorePlacement } = require("../src/window-placement");
+const appRoot = process.env.PET_SMOKE_APP || path.join(__dirname, "..");
+const { restorePlacement } = require(path.join(appRoot, "src/window-placement"));
 
 const dataDir = process.env.PET_SMOKE_DATA || fs.mkdtempSync(path.join(os.tmpdir(), "desktop-pet-smoke-"));
-const screenshots = path.join(__dirname, "../out/smoke");
+const screenshots = path.join(__dirname, process.env.PET_SMOKE_APP ? "../out/smoke-packaged" : "../out/smoke");
 app.setPath("userData", dataDir);
 app.disableHardwareAcceleration();
 
@@ -105,13 +106,13 @@ async function screenshot(window, name) {
 
 async function run() {
   if (process.env.PET_SMOKE_PHASE === "second-instance") {
-    require("../src/main.js");
+    require(path.join(appRoot, "src/main.js"));
     assert.equal(app.hasSingleInstanceLock(), false, "A second instance acquired the profile lock");
     // Quit may finish after ready on Linux; the parent verifies the natural exit.
     await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Second instance did not quit")), 5000));
   }
   if (process.env.PET_SMOKE_PHASE === "restart") {
-    require("../src/main.js");
+    require(path.join(appRoot, "src/main.js"));
     await app.whenReady();
     const pet = await findWindow("index.html");
     const placement = JSON.parse(fs.readFileSync(path.join(dataDir, "window-placement.json"), "utf8"));
@@ -158,7 +159,7 @@ async function run() {
     await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Confirmed quit did not exit")), 5000));
   }
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  require("../src/main.js");
+  require(path.join(appRoot, "src/main.js"));
   await app.whenReady();
   const pet = await findWindow("index.html");
   const settings = await findWindow("settings.html");
@@ -328,7 +329,7 @@ async function run() {
   const beforeQuick = quick.getBounds();
   pet.setPosition(originalPetBounds.x - 100, originalPetBounds.y - 40);
   await until(() => quick.getBounds().x !== beforeQuick.x, "companion input follows pet");
-  const expectedQuick = require("../src/companion-layout").companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea);
+  const expectedQuick = require(path.join(appRoot, "src/companion-layout")).companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea);
   assert.deepEqual(quick.getBounds(), expectedQuick);
   pet.setBounds(originalPetBounds);
   const recovery = Menu.getApplicationMenu().getMenuItemById("show-pet");
@@ -349,7 +350,7 @@ async function run() {
     return bounds.x >= area.x && bounds.y >= area.y && bounds.x + bounds.width <= area.x + area.width && bounds.y + bounds.height <= area.y + area.height;
   }, "recover pet after display change");
   await delay(400);
-  assert.deepEqual(quick.getBounds(), require("../src/companion-layout").companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea));
+  assert.deepEqual(quick.getBounds(), require(path.join(appRoot, "src/companion-layout")).companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea));
   assert.deepEqual((await evaluate(pet, () => window.desktopPet.getChatState())).history, profileBeforeRecovery.history);
   const recoveredChat = chat.getBounds();
   const recoveredArea = screen.getDisplayMatching(recoveredChat).workArea;

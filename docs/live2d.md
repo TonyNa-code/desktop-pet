@@ -1,10 +1,10 @@
-# Live2D Preview
+# Live2D Companion
 
 [English](#english) | [简体中文](#简体中文) | [日本語](#日本語)
 
 ## English
 
-This experimental source branch is not part of the 0.4.x releases. Sprite characters remain available and keep their existing controls.
+Live2D is available as an optional feature from 0.5.0. Sprite characters remain available and keep their existing controls. Install Core and import a compatible model to use it.
 
 ### Import a Model
 
@@ -50,6 +50,8 @@ The local test uses **Haru**, an official Live2D sample from [CubismWebSamples 4
 
 Local runtime checks also cover **Epsilon FREE** and **Mao PRO** samples: visible canvas content, native blinking and breathing, pointer tracking, expressions, motion preview, inline conversation, and audio-driven mouth movement. These sample assets are not included in this repository.
 
+Live2D rendering and interaction have been tested on macOS. Windows and Linux pass automated app, restart and packaging checks; their Live2D graphics still need device-level verification. TTS playback is checked with local test audio, not every external voice service.
+
 Cubism Core is proprietary. The Framework and model assets also have their own licenses. Applications with user-loadable models are subject to the [official SDK publication terms](https://www.live2d.com/en/sdk/license/expandable/). The repository's MIT license does not cover those components or grant an SDK publication license. Neither Core nor sample models are bundled. [Third-party notices](../src/live2d/vendor/NOTICE.md).
 
 ### Privacy
@@ -60,7 +62,7 @@ Chat and spoken text still go to the services you explicitly configure. Returned
 
 ## 简体中文
 
-这是源码分支中的实验功能，不在 GitHub 0.4.x 安装包中。原有图片桌宠和设置保持不变。
+从 0.5.0 起可以选择使用 Live2D。原有图片桌宠和设置保持不变；安装 Core 并导入兼容模型后即可切换。
 
 1. 打开 **陪伴设置 > 角色 > 导入 Live2D**，选择模型的 `.model3.json`，或仅含一个模型的 ZIP。纹理、动作等文件需保留原有目录结构；单独的 `.moc3` 无法使用。
 2. 确认导入并切换到新角色。首次使用时点 **下载 Core 5.2**，保存官方 `live2dcubismcore.min.js`，再通过 **安装 Core** 选择这个文件。程序只接受已核验的官方文件，运行库保存在本机数据目录。
@@ -86,11 +88,13 @@ Chat and spoken text still go to the services you explicitly configure. Returned
 
 本地也已用 Epsilon FREE 和 Mao PRO 验证显示、眨眼、呼吸、注视、表情、动作、人物旁对话和音量口型。这些模型文件不会随仓库一起发布。
 
+Live2D 画面与交互在 macOS 上实测。Windows、Linux 通过应用、重启与打包自动检查，Live2D 图形效果仍需对应设备实测。TTS 播放使用本地测试音频验证，未逐一验证所有外部语音服务。
+
 模型只在隔离窗口中接收动作参数和音量，不会拿到密钥、聊天记录或文件系统权限，也不能联网加载素材。导入不会覆盖原始文件。聊天和 TTS 仍只使用你配置的服务；服务返回的音频链接必须与服务地址同来源，否则应改为直接返回音频。
 
 ## 日本語
 
-ソースブランチで試せる実験的な機能です。公開版 0.4.x には含まれていません。既存のスプライトキャラクターはそのまま使えます。
+0.5.0 から任意の機能として使えます。Core と対応モデルを導入してください。既存のスプライトキャラクターはそのまま使えます。
 
 1. **付き添い設定 > キャラクター > Live2D を追加** から `.model3.json`、またはモデルが一つだけ入った ZIP を選びます。関連ファイルのフォルダー構成を保ってください。`.moc3` 単体では使えません。
 2. 追加したキャラクターを選択します。初回は **Core 5.2 をダウンロード** から公式の `live2dcubismcore.min.js` を保存し、**Core を導入** で選びます。確認済みの公式ファイルのみ受け付けます。
@@ -115,5 +119,7 @@ Cubism 3/4 の書き出しモデルに対応します。Cubism 2、`.cmo3` 編�
 テストには Live2D Inc. の公式 Haru を使用しました。MIT 素材ではなく、上記の専用利用規約が適用されます。Core はプロプライエタリです。ユーザーモデルを読み込むアプリには Live2D の公開条件が適用され、リポジトリの MIT ライセンスで代替できません。Core とテストモデルは同梱されません。
 
 Epsilon FREE と Mao PRO でも表示、まばたき、呼吸、視線、表情、モーション、会話、音量による口の動きをローカルで確認しています。これらのモデルはリポジトリに含まれません。
+
+Live2D の描画と操作は macOS で確認済みです。Windows と Linux はアプリ・再起動・パッケージの自動検証を通過していますが、Live2D の描画は各端末での検証が残っています。TTS 再生はローカルのテスト音声で確認しており、すべての外部音声サービスを検証したものではありません。
 
 モデルは設定・会話・API キー・ファイル操作の権限を持たない隔離フレームで表示され、外部通信もできません。会話と TTS だけは設定したサービスに送信されます。音声の返却リンクは TTS サービスと同一オリジンである必要があります。
