@@ -1,0 +1,3 @@
+# Preserve the exact bytes checked against upstream SHA-256 hashes.
+/src/live2d/vendor/pixi.min.js -text
+/src/live2d/vendor/cubism4.min.js -text
