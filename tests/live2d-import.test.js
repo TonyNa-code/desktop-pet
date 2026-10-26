@@ -64,6 +64,27 @@ test("Live2D rejects missing resources, symlinked directories and malformed PNGs
   assert.throws(() => readLive2DPack(root));
 });
 
+test("native hit areas survive import with unique names and no unrelated metadata", (t) => {
+  const { root } = fixture(t, raw => { raw.HitAreas = [
+    { Id: "HitAreaHead", Name: "", url: "https://example.invalid" },
+    { Id: "HitAreaBody", Name: "" }, { Id: "Hair", Name: "Head" }, { Id: "Hair2", Name: "Head" },
+    { Id: "Hands", Name: "__proto__" },
+  ]; });
+  const areas = JSON.parse(readLive2DPack(root).files["model.model3.json"]).HitAreas;
+  assert.equal(areas.length, 5);
+  assert.equal(new Set(areas.map(area => area.Name)).size, 5);
+  assert.equal(areas[0].Name, "HitAreaHead 1");
+  assert.equal(areas[1].Name, "HitAreaBody 2");
+  assert.equal(areas[0].url, undefined);
+  assert.equal(areas.some(area => area.Name === "__proto__"), false);
+});
+
+test("malformed or unbounded hit areas are rejected", t => {
+  for (const areas of [null, {}, [null], [{ Id: "" }], [{ Id: "x".repeat(129) }], Array(65).fill({ Id: "Head" })]) {
+    assert.throws(() => readLive2DPack(fixture(t, raw => { raw.HitAreas = areas; }).root), /invalid_hit_areas/);
+  }
+});
+
 test("Live2D ZIP rejects ambiguous models, traversal and case-colliding paths", (t) => {
   const { root, files } = fixture(t);
   const target = path.join(root, "bad.zip");

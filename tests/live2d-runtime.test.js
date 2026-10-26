@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const { loadMain } = require("./helpers");
+const { loadMain, loadRenderer } = require("./helpers");
 const { loadPet } = require("./pet-helpers");
 
 test("vendored display bundles match the pinned upstream releases and omit Core/models", () => {
@@ -27,10 +27,67 @@ test("model expression mappings and gaze normalize without enabling affection or
 
 test("Live2D click-only advances once without scheduling sprite actions or network calls", () => {
   const pet = loadPet();
-  pet.run(`globalThis.modelCalls=[]; window.DesktopPetModel={apply(){},expression(){},stopMouth(){},busy(){},cycle(){modelCalls.push("cycle")}};
+  pet.run(`globalThis.modelCalls=[]; window.DesktopPetModel={apply(){},expression(){},stopMouth(){},busy(){},dragging(){},cycle(){modelCalls.push("cycle")}};
     applyAppState({settings:{expressionMode:"clickOnly"},activeCharacter:{id:"imported-fixture",type:"live2d",states:{idle:{row:0,frames:1,interval:1000}}}});
     handleClick(); handleDoubleClick(); handleLongPress(); scheduleIdleBehavior();`);
   assert.deepEqual(JSON.parse(pet.run('JSON.stringify(modelCalls)')), ["cycle"]);
+});
+
+test("slow double-clicks advance once even when pointer events have no click count", () => {
+  const pet = loadPet();
+  pet.run(`globalThis.cycles=0; window.DesktopPetModel={dragging(){},cycle(){cycles++}};
+    character={...character,type:"live2d"}; settings.expressionMode="clickOnly";`);
+  for (const detail of [1, 2]) {
+    pet.run('clickOnlyReadyAt=0; beginDrag({button:0,clientX:96,clientY:100,screenX:100,screenY:100})');
+    pet.events.mousedown({ detail });
+    pet.run('endDrag({detail:0})');
+  }
+  assert.equal(pet.run('cycles'), 1);
+});
+
+test("touch mappings validate indices, preserve motion group names, and keep quiet idle optional", () => {
+  const app = loadMain();
+  const persona = app.run(`normalizeSettings({persona:{live2dIdle:false,live2dTouches:{
+    head:{expression:0,motion:{group:"",index:0}},greet:{expression:64,motion:{group:"Tap",index:-1}}
+  }}}).persona`);
+  assert.equal(persona.live2dIdle, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(persona.live2dTouches)), {
+    head: { expression: 0, motion: { group: "", index: 0 } }, greet: { expression: -1, motion: null },
+  });
+  assert.equal(app.run('normalizeSettings({}).persona.live2dIdle'), true);
+});
+
+test("a delayed hit test cannot trigger a touch after dragging, mode changes or focus loss", async () => {
+  for (const interrupt of ['cancelDrag()', 'settings.expressionMode="clickOnly"', 'dragStart={}']) {
+    const pet = loadPet();
+    pet.run(`globalThis.touches=[]; window.DesktopPetModel={dragging(){},locate(){return new Promise(resolve=>globalThis.resolveHit=resolve)},touch(kind){touches.push(kind)}};
+      character={...character,type:"live2d"}; scheduleSingleClick("greet",{x:0.5,y:0.2});`);
+    pet.fireTimer(pet.run('clickTimer'));
+    pet.run(interrupt);
+    pet.run('resolveHit("head")');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(pet.run('touches.length'), 0);
+  }
+});
+
+test("native head hits select head responses and transparent hits do nothing", async () => {
+  for (const hit of ["head", "greet", null]) {
+    const pet = loadPet();
+    pet.context.hit = hit;
+    pet.run(`globalThis.touches=[]; window.DesktopPetModel={locate:async()=>hit,touch(kind){touches.push(kind)}};
+      character={...character,type:"live2d"}; scheduleSingleClick("greet",{x:0.5,y:0.2});`);
+    pet.fireTimer(pet.run('clickTimer'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(JSON.parse(pet.run('JSON.stringify(touches)')), hit ? [hit] : []);
+  }
+});
+
+test("import feedback follows settings language changes", () => {
+  const ui = loadRenderer("settings.js");
+  ui.run('setImportStatus("settings.imported"); activeLanguage="en-US"; applyStaticTranslations()');
+  assert.match(ui.nodes.get("#import-status").textContent, /Character/);
+  ui.run('activeLanguage="ja-JP"; applyStaticTranslations()');
+  assert.equal(ui.nodes.get("#import-status").textContent, require("../src/i18n").t("settings.imported", {}, "ja-JP"));
 });
 
 test("partner touch phrases are opt-in, local and leave affection unchanged", () => {

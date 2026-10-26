@@ -17,6 +17,27 @@
   let analyser;
   let audioTimer;
   let loadTimer;
+  let locationRequest = 0;
+  const locations = new Map();
+
+  function settleLocation(request, kind = null) {
+    const pending = locations.get(request);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    locations.delete(request);
+    pending.resolve(kind);
+  }
+
+  function locate(x, y) {
+    if (!loaded || !Number.isFinite(x) || !Number.isFinite(y)) return Promise.resolve(null);
+    for (const request of locations.keys()) settleLocation(request);
+    const request = ++locationRequest;
+    return new Promise(resolve => {
+      const timer = setTimeout(() => settleLocation(request), 400);
+      locations.set(request, { resolve, timer });
+      send("locate", { x, y, request });
+    });
+  }
 
   function send(type, extra = {}) {
     if (frame && ready && current) frame.contentWindow.postMessage({ channel: CHANNEL, type, id: current.id, ...extra }, ORIGIN);
@@ -58,7 +79,8 @@
   async function apply(character, settings, busy = false) {
     const next = character.type === "live2d" ? {
       id: character.id, automatic: settings.expressionMode === "automatic",
-      gaze: settings.persona?.live2dGaze !== false, busy,
+      gaze: settings.persona?.live2dGaze !== false, idle: settings.persona?.live2dIdle !== false,
+      touches: settings.persona?.live2dTouches || {}, busy, dragging: current?.id === character.id && current.dragging === true,
     } : null;
     language = settings.resolvedLanguage;
     if (next && current?.id === next.id && frame) {
@@ -67,6 +89,7 @@
       return;
     }
     const token = ++ticket;
+    for (const request of locations.keys()) settleLocation(request);
     stopMouth();
     clearTimeout(loadTimer);
     frame?.remove(); frame = null; ready = loaded = false;
@@ -98,6 +121,10 @@
       send("presence", { state: presence });
     }
     if (event.data.type === "error") { clearTimeout(loadTimer); message("live2d.loadFailed"); }
+    if (event.data.type === "location") {
+      const kind = event.data.kind;
+      settleLocation(event.data.request, ["head", "greet"].includes(kind) ? kind : null);
+    }
   });
   window.desktopPet.onModelAction((action) => {
     if (current?.id === action.id) {
@@ -107,13 +134,14 @@
   });
   status.addEventListener("click", () => window.desktopPet.openCompanionSettings());
   window.DesktopPetModel = {
-    apply, attachAudio, stopMouth,
+    apply, attachAudio, stopMouth, locate,
     cycle: () => { if (loaded) send("cycle"); },
     expression: (index) => { desiredExpression = index; if (loaded) send("expression", { index }); },
-    touch: () => { if (loaded) send("touch"); },
+    touch: (kind = "greet") => { if (loaded) send("touch", { kind }); },
     replyMotion: (motion) => { if (loaded) send("reply-motion", { group: motion.group, index: motion.index }); },
     presence: (state) => { presence = state; if (loaded) send("presence", { state }); },
     gaze: (x, y) => send("gaze", { x, y }),
     busy: (busy) => { if (current) { current.busy = busy; send("options", current); } },
+    dragging: (dragging) => { if (current) { current.dragging = dragging; send("options", current); } },
   };
 })();

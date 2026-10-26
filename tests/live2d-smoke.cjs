@@ -74,12 +74,24 @@ async function run() {
     assert.equal(await frame.evaluate(() => typeof window.desktopPet), "undefined");
     assert.equal(await frame.evaluate(() => typeof window.require), "undefined");
     await frame.evaluate(() => {
+      window.modelCommands = [];
+      window.addEventListener("message", event => { if (event.data?.channel === "desktop-pet-model") modelCommands.push(event.data.type); });
       const original = PIXI.live2d.Live2DModel.from;
       PIXI.live2d.Live2DModel.from = async (...args) => { window.testModel = await original.apply(PIXI.live2d.Live2DModel, args); return window.testModel; };
     });
     await pet.evaluate((id) => {
       document.querySelector("iframe").contentWindow.postMessage({ channel: "desktop-pet-model", type: "load", id }, "pet-live2d://viewer");
       window.modelEvents = [];
+      window.expressionSources = [];
+      window.pointerEvents = [];
+      for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"]) {
+        document.querySelector("#pet").addEventListener(type, event => pointerEvents.push({ type, detail: event.detail, time: Math.round(performance.now()) }));
+      }
+      const originalExpression = window.DesktopPetModel.expression;
+      window.DesktopPetModel.expression = index => {
+        expressionSources.push({ index, stack: new Error().stack.split("\n").slice(1, 5).map(line => line.replace(/file:\/\/[^)]+\//g, "")) });
+        originalExpression(index);
+      };
       window.addEventListener("message", (event) => { if (event.data?.channel === "desktop-pet-model") modelEvents.push(event.data); });
     }, id);
     await frame.waitForFunction(() => window.testModel?.internalModel);
@@ -118,7 +130,44 @@ async function run() {
     assert.equal(after.length, before + 1, "one click, one expression");
     assert.equal(after.at(-1).index, 0);
     await pet.waitForTimeout(1200);
-    assert.equal(await pet.evaluate(() => modelEvents.filter((item) => item.type === "expression").length), after.length);
+    const heldExpressions = await pet.evaluate(() => modelEvents.filter(item => item.type === "expression"));
+    assert.equal(heldExpressions.length, after.length, JSON.stringify({ heldExpressions, commands: await frame.evaluate(() => modelCommands), sources: await pet.evaluate(() => expressionSources) }));
+    await pet.locator("#pet").dblclick();
+    await pet.waitForTimeout(600);
+    assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "expression").length), after.length + 1, "double-click adds no second expression");
+    const slowClickBox = await pet.locator("#pet").boundingBox();
+    const slowClickX = slowClickBox.x + slowClickBox.width / 2;
+    const slowClickY = slowClickBox.y + slowClickBox.height / 2;
+    await pet.mouse.move(slowClickX, slowClickY);
+    await pet.mouse.down({ clickCount: 1 }); await pet.mouse.up({ clickCount: 1 });
+    await pet.waitForTimeout(320);
+    await pet.mouse.down({ clickCount: 2 }); await pet.mouse.up({ clickCount: 2 });
+    await pet.waitForTimeout(600);
+    assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "expression").length), after.length + 2,
+      JSON.stringify({ reason: "slow double-click adds no second expression either", events: await pet.evaluate(() => pointerEvents), expressions: await pet.evaluate(() => modelEvents.filter(item => item.type === "expression")), sources: await pet.evaluate(() => expressionSources) }));
+    const manualBeforeHold = await pet.evaluate(() => modelEvents.filter(item => item.type === "expression").length);
+    await pet.mouse.down(); await pet.waitForTimeout(650); await pet.mouse.up();
+    await pet.waitForTimeout(400);
+    assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "expression").length), manualBeforeHold, "long hold never advances manual expressions");
+    assert.equal(await pet.evaluate(() => settings.scale), 2, "double-click and hold never resize the pet");
+    await app.evaluate(({ screen }) => {
+      globalThis.testCursor = { x: 300, y: 300 };
+      globalThis.originalCursorReader = screen.getCursorScreenPoint;
+      screen.getCursorScreenPoint = () => globalThis.testCursor;
+    });
+    try {
+      await pet.mouse.down();
+      await pet.waitForTimeout(50);
+      await app.evaluate(() => { globalThis.testCursor = { x: 320, y: 320 }; });
+      await pet.waitForFunction(() => didDrag === true);
+      await pet.mouse.up();
+      await pet.waitForFunction(() => dragStart === null && didDrag === false);
+      await pet.waitForTimeout(350);
+      assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "expression").length), manualBeforeHold, "manual dragging preserves the selected native expression");
+      assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "touch").length), 0, "dragging never turns into a tap");
+    } finally {
+      await app.evaluate(({ screen }) => { screen.getCursorScreenPoint = globalThis.originalCursorReader; });
+    }
     await pet.screenshot({ path: path.join(output, "model-manual-200.png") });
     await pet.evaluate(() => window.desktopPet.setSettings({ expressionMode: "automatic", scale: 0.75 }));
     await pet.waitForTimeout(600);
@@ -145,6 +194,62 @@ async function run() {
     await settings.screenshot({ path: path.join(output, "settings-reply-gestures.png") });
     await settings.locator("#save-settings").click();
     await pet.waitForFunction(() => settings.persona.live2dExpressions.happy === 1);
+    await settings.locator("#live2d-idle").uncheck();
+    await settings.locator("#live2d-gaze").uncheck();
+    await settings.locator("#live2d-touch-head").selectOption("0");
+    await settings.locator("#live2d-touch-greet").selectOption("2");
+    await settings.locator("#save-settings").click();
+    await pet.waitForFunction(() => settings.persona.live2dIdle === false && settings.persona.live2dTouches.head.expression === 0);
+    await settings.locator("#live2d-touch-head").scrollIntoViewIfNeeded();
+    await settings.screenshot({ path: path.join(output, "settings-touch-responses.png") });
+    await pet.evaluate(() => { dismissBubble(); window.DesktopPetModel.expression(-1); });
+    await pet.waitForTimeout(600);
+    // Probe the same isolated bridge used by pointer events, including models with no hit areas.
+    const touchPoints = await pet.evaluate(async () => {
+      const points = {};
+      for (const y of [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]) {
+        for (const x of [0.5, 0.4, 0.6]) {
+          const kind = await window.DesktopPetModel.locate(x, y);
+          if (kind && !points[kind]) points[kind] = { x, y };
+        }
+      }
+      return points;
+    });
+    assert.ok(touchPoints.head && touchPoints.greet, "head and body hit regions are reachable");
+    const clickPoint = async point => {
+      const box = await pet.locator("#pet").boundingBox();
+      await pet.locator("#pet").click({ position: { x: point.x * box.width, y: point.y * box.height } });
+    };
+    await clickPoint(touchPoints.head);
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "touch").at(-1)?.kind === "head");
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "expression").at(-1)?.index === 0);
+    await pet.screenshot({ path: path.join(output, "head-pat.png") });
+    await clickPoint(touchPoints.head);
+    await pet.waitForTimeout(350);
+    assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "touch").length), 1, "rapid pats never stack");
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "expression").at(-1)?.index === -1);
+    await pet.waitForTimeout(400);
+    await clickPoint(touchPoints.greet);
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "touch").at(-1)?.kind === "greet");
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "expression").at(-1)?.index === 2);
+    await pet.locator("#talk").click();
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "expression").at(-1)?.index === -1);
+    await pet.locator("#companion-close").click();
+    await pet.waitForTimeout(2400);
+    await clickPoint({ x: 0.001, y: 0.001 });
+    await pet.waitForTimeout(450);
+    assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "touch").length), 2, "empty corners do not trigger interaction");
+    assert.equal(requests, 0, "touch interactions never call the LLM");
+    for (const language of ["ja-JP", "zh-CN", "en-US"]) {
+      await settings.evaluate(language => window.desktopPet.saveChatConfig({ language }), language);
+      await settings.waitForFunction(language => document.documentElement.lang === language, language);
+      await settings.locator("#live2d-motion-touch-greet").scrollIntoViewIfNeeded();
+      assert.equal(await settings.locator("#live2d-touch-head").inputValue(), "0");
+      assert.equal(await settings.locator("#live2d-touch-greet").inputValue(), "2");
+      assert.equal(await settings.locator("#live2d-idle").isChecked(), false);
+      assert.equal(await settings.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      await settings.screenshot({ path: path.join(output, `touch-settings-${language}.png`) });
+    }
     await settings.evaluate((endpoint) => window.desktopPet.saveChatConfig({
       assistant: { baseUrl: `${endpoint}/v1`, model: "local-test", stream: false },
       tts: { enabled: true, provider: "custom", endpoint: `${endpoint}/tts`, customBodyTemplate: '{"text":"{{text}}"}' },
@@ -206,7 +311,7 @@ async function run() {
     await pet.waitForFunction(() => !document.querySelector("iframe") && spriteImage && character.id === "luna");
     assert.equal(await pet.evaluate(() => ctx.getImageData(0, 0, 768, 832).data.some((value, index) => index % 4 === 3 && value > 0)), true);
     assert.deepEqual(errors, []);
-    console.log("PASS: native sample loading, isolated frame, blink, breath, gaze, manual expression, motion, inline draft/submit/failure/cancel, history sync, chat expression, audio-driven mouth/stop, scaling, sprite fallback; isolated local LLM/TTS only.");
+    console.log("PASS: native sample loading, isolated frame, blink, breath, gaze, manual expression, motion, head/body touch mapping/restoration/interruption, empty hit rejection, inline draft/submit/failure/cancel, history sync, chat expression, audio-driven mouth/stop, scaling, sprite fallback; isolated local LLM/TTS only.");
   } finally {
     await app.evaluate(({ app }) => app.exit(0));
     await app.close();

@@ -68,6 +68,7 @@ let didDrag = false;
 let clickTimer;
 let clickOnlyReadyAt = 0;
 let ignoreSingleClicksUntil = 0;
+let interactionTicket = 0;
 let hoverReadyAt = 0;
 let bubbleTimer;
 let didShowStartupGreeting = false;
@@ -302,6 +303,7 @@ function applyAppState(nextAppState = {}) {
 }
 
 function resetAfterSettingsChange() {
+  interactionTicket++;
   window.clearTimeout(clickTimer);
   ignoreSingleClicksUntil = 0;
   clickOnlyReadyAt = 0;
@@ -329,12 +331,12 @@ function resetAfterSettingsChange() {
 
 function respondToInteraction(kind) {
   if (settings.expressionMode !== "automatic" || !settings.interactionResponses
-    || conversationActive || speechActive) return;
+    || conversationActive || speechActive || window.DesktopPetCompanionInput?.isOpen()) return;
   const choices = kind === "head" ? ["shy", "happy", "review", "idle"]
     : kind === "drop" ? ["tsundereProud", "happy", "waving", "idle"] : ["waving", "happy", "idle"];
   const action = choices.find((name) => character.states[name]);
-  if (action) playTemporary(action, 1400);
-  if (character.type === "live2d") window.DesktopPetModel?.touch();
+  if (character.type === "live2d") window.DesktopPetModel?.touch(kind);
+  else if (action) playTemporary(action, 1400);
   // Touches stay local and quiet; they neither replace a visible reply nor queue up.
   if (bubbleVisible || performance.now() < interactionReadyAt) return;
   interactionReadyAt = performance.now() + 6000;
@@ -351,40 +353,49 @@ function handleClick(kind = "greet") {
     const [nextState, nextFrame] = nextStaticExpression();
     setStaticExpression(nextState, nextFrame);
   } else {
-    if (conversationActive || speechActive) return;
+    if (conversationActive || speechActive || window.DesktopPetCompanionInput?.isOpen()) return;
     if (settings.interactionResponses) { respondToInteraction(kind); return; }
-    if (character.type === "live2d") { window.DesktopPetModel?.touch(); return; }
+    if (character.type === "live2d") { window.DesktopPetModel?.touch(kind); return; }
     const nextState = nextClickState();
     playTemporary(nextState);
   }
 }
 
 function handleDoubleClick() {
+  interactionTicket++;
   window.clearTimeout(clickTimer);
-  if (settings.expressionMode === "clickOnly" || conversationActive || speechActive) return;
+  if (character.type === "live2d" || settings.expressionMode === "clickOnly" || conversationActive || speechActive) return;
   ignoreSingleClicksUntil = performance.now() + 360;
   window.desktopPet.recordInteraction("doubleClick");
   playTemporary("jumping", 1200);
 }
 
-function handleLongPress() {
+function handleLongPress(kind = "head") {
   window.clearTimeout(clickTimer);
   if (settings.expressionMode === "clickOnly" || conversationActive || speechActive) return;
   window.desktopPet.recordInteraction("longPress");
   if (settings.interactionResponses) {
-    respondToInteraction("head");
+    respondToInteraction(kind);
+  } else if (character.type === "live2d") {
+    window.DesktopPetModel?.touch(kind);
   } else {
     playTemporary("review", 1400);
   }
 }
 
-function scheduleSingleClick(kind) {
+function scheduleSingleClick(kind, point, longPress = false) {
   window.clearTimeout(clickTimer);
   const scheduledAt = performance.now();
-  clickTimer = window.setTimeout(() => {
+  const token = ++interactionTicket;
+  clickTimer = window.setTimeout(async () => {
     if (scheduledAt < ignoreSingleClicksUntil) return;
-    handleClick(kind);
-  }, SINGLE_CLICK_DELAY);
+    if (character.type === "live2d" && point) {
+      kind = await window.DesktopPetModel?.locate(point.x, point.y);
+      if (!kind || token !== interactionTicket || dragStart || settings.expressionMode !== "automatic") return;
+    }
+    if (longPress) handleLongPress(kind);
+    else handleClick(kind);
+  }, longPress ? 0 : SINGLE_CLICK_DELAY);
 }
 
 function handleClickOnlyPointerClick() {
@@ -396,6 +407,7 @@ function handleClickOnlyPointerClick() {
 
 function beginDrag(event) {
   if (event.button !== 0) return;
+  interactionTicket++;
   window.clearTimeout(clickTimer);
   const bounds = canvas.getBoundingClientRect();
   dragStart = {
@@ -403,6 +415,7 @@ function beginDrag(event) {
     y: event.screenY,
     time: performance.now(),
     kind: (event.clientY - bounds.top) / bounds.height < 0.46 ? "head" : "greet",
+    point: { x: (event.clientX - bounds.left) / bounds.width, y: (event.clientY - bounds.top) / bounds.height },
     expression: { state, frame: frameIndex },
   };
   didDrag = false;
@@ -420,6 +433,7 @@ function beginDrag(event) {
     }
     if (dragStart !== activeDrag) return;
     if (Math.abs(movement.dx) > 2 || Math.abs(movement.dy) > 2) {
+      if (!didDrag) window.DesktopPetModel?.dragging(true);
       didDrag = true;
       if (Math.abs(movement.dx) > 4) {
         setState(movement.dx > 0 ? "runningRight" : "runningLeft");
@@ -437,8 +451,9 @@ function endDrag(event) {
   canvas.classList.remove("dragging");
 
   const heldDuration = performance.now() - dragStart.time;
-  const { kind, expression } = dragStart;
+  const { kind, point, expression, clickCount } = dragStart;
   dragStart = null;
+  window.DesktopPetModel?.dragging(false);
 
   if (didDrag) {
     didDrag = false;
@@ -453,16 +468,19 @@ function endDrag(event) {
   }
 
   if (heldDuration > 450) {
-    if (settings.expressionMode !== "clickOnly") handleLongPress();
+    if (settings.expressionMode !== "clickOnly") {
+      if (character.type === "live2d") scheduleSingleClick(kind, point, true);
+      else handleLongPress();
+    }
     return;
   }
   if (settings.expressionMode === "clickOnly") {
-    if (event.detail > 1) return;
+    if (event.detail > 1 || clickCount > 1) return;
     handleClickOnlyPointerClick();
     return;
   }
   if (event.detail > 1) return;
-  scheduleSingleClick(kind);
+  scheduleSingleClick(kind, point);
 }
 
 let bubbleDeadline = 0;
@@ -768,6 +786,8 @@ function loadSprite(spritePath) {
 }
 
 canvas.addEventListener("pointerdown", beginDrag);
+// PointerEvent.detail can be zero; mousedown retains the platform's click count.
+canvas.addEventListener("mousedown", event => { if (dragStart) dragStart.clickCount = event.detail; });
 canvas.addEventListener("pointermove", (event) => {
   if (dragStart || character.type !== "live2d") return;
   const bounds = canvas.getBoundingClientRect();
@@ -784,6 +804,8 @@ canvas.addEventListener("pointerenter", () => {
 });
 window.addEventListener("pointerup", endDrag);
 function cancelDrag() {
+  interactionTicket++;
+  window.DesktopPetModel?.dragging(false);
   if (!dragStart) return;
   const expression = dragStart.expression;
   dragStart = null;

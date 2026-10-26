@@ -11,13 +11,17 @@
   let generation = 0;
   let automatic = true;
   let gazeEnabled = true;
+  let idleEnabled = true;
   let busy = false;
+  let dragging = false;
   let expressionIndex = -1;
   let expressionQueue = Promise.resolve();
   let mouthTarget = 0;
   let mouthValue = 0;
   let mouthAt = 0;
-  let pettingUntil = 0;
+  let touchState = null;
+  let touchAt = -Infinity;
+  let touches = {};
   let nextMotionAt = 0;
   let replyMotionActive = false;
   let replyMotionAt = -Infinity;
@@ -60,6 +64,45 @@
     }).catch(() => notify("action-error"));
   }
 
+  function cancelTouch(restore = true) {
+    const previous = touchState;
+    touchState = null;
+    if (restore && previous?.expressionChanged) expression(previous.expression);
+  }
+
+  function touch(kind) {
+    const now = performance.now();
+    if (!automatic || busy || dragging || presence !== "idle" || now - touchAt < 2400) return;
+    if (!["head", "greet", "drop"].includes(kind)) return;
+    cancelTouch();
+    stopMotions();
+    const mapping = touches[kind];
+    const index = mapping?.expression;
+    const expressionChanged = Number.isInteger(index) && index >= 0 && index < metadata.expressions.length;
+    touchState = { kind, start: now, expression: expressionIndex, expressionChanged };
+    touchAt = now;
+    if (expressionChanged) expression(index);
+    touchState.nativeMotion = mapping?.motion ? motion(mapping.motion.group, mapping.motion.index) : false;
+    nextMotionAt = now + 45000;
+    notify("touch", { kind });
+  }
+
+  function locate(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x >= 1 || y < 0 || y >= 1) return null;
+    const gl = application.renderer.gl;
+    const pixel = new Uint8Array(4);
+    gl.readPixels(Math.floor(x * canvas.width), canvas.height - 1 - Math.floor(y * canvas.height), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    if (pixel[3] <= 8) return null;
+    const areas = model.internalModel.hitAreas;
+    if (areas && Object.keys(areas).length) {
+      const hits = model.hitTest(x * innerWidth, y * innerHeight);
+      if (hits.some(name => /head|face/i.test(`${name} ${areas[name]?.id || ""}`))) return "head";
+      return hits.length ? "greet" : null;
+    }
+    // Without named regions, use a height split inside the visible silhouette.
+    return y < 0.46 ? "head" : "greet";
+  }
+
   function motion(group, index = 0, reply = false) {
     if (!automatic || !model || !Object.hasOwn(metadata.motions, group)) return false;
     if (!Number.isInteger(index) || index < 0 || index >= metadata.motions[group]) return false;
@@ -76,13 +119,18 @@
     modelId = data.id;
     automatic = data.automatic !== false;
     gazeEnabled = data.gaze !== false;
+    idleEnabled = data.idle !== false;
+    touches = data.touches || {};
     busy = data.busy === true;
+    dragging = data.dragging === true;
     presence = "idle";
     attentionWeight = 0;
     artBounds = null;
     expressionIndex = -1;
     mouthTarget = mouthValue = 0;
     replyMotionAt = -Infinity;
+    touchState = null;
+    touchAt = -Infinity;
     model?.destroy({ children: true, texture: true, baseTexture: true });
     model = null;
     try {
@@ -106,6 +154,7 @@
       application.stage.addChild(model);
       stopMotions();
       const internal = model.internalModel;
+      internal.motionManager.on("motionFinish", () => { if (internal === model?.internalModel) replyMotionActive = false; });
       const core = internal.coreModel;
       const { ids, resolve } = window.DesktopPetRig.configure(internal);
       artBounds = window.DesktopPetRig.measure(application, model);
@@ -125,16 +174,21 @@
         if (attentionWeight > 0.005) {
           if (ids.has(resolve("ParamAngleZ"))) core.addParameterValueById(resolve("ParamAngleZ"), (presence === "thinking" ? 2 : -1.5) * attentionWeight);
         }
-        if (automatic && now < pettingUntil) {
-          const weight = Math.min(1, (pettingUntil - now) / 400);
-          if (ids.has(resolve("ParamAngleZ"))) core.addParameterValueById(resolve("ParamAngleZ"), -4 * weight);
+        if (touchState) {
+          const progress = Math.min(1, (now - touchState.start) / 2200);
+          const weight = Math.sin(Math.PI * progress) ** 2;
+          if (automatic && !touchState.nativeMotion && ids.has(resolve("ParamAngleZ"))) {
+            core.addParameterValueById(resolve("ParamAngleZ"), (touchState.kind === "head" ? -5 : 2) * weight);
+          }
+          if (progress >= 1) cancelTouch();
         }
-        if (automatic && !busy && presence === "idle" && now > nextMotionAt) {
+        if (automatic && idleEnabled && !busy && !dragging && presence === "idle" && now > nextMotionAt) {
           const group = Object.keys(metadata.motions).find((key) => /^idle$/i.test(key));
           nextMotionAt = now + 45000 + Math.random() * 15000;
           if (group && metadata.motions[group]) model.motion(group, 0, 1).catch(() => {});
         }
       });
+      if (document.hidden) application.ticker.stop();
       notify("loaded", { expressions: metadata.expressions, motions: metadata.motions });
     } catch {
       if (generation === token) notify("error");
@@ -150,40 +204,54 @@
       const changed = automatic !== (data.automatic !== false);
       automatic = data.automatic !== false;
       gazeEnabled = data.gaze !== false;
-      if (data.busy === true && !busy) stopMotions();
+      const interrupt = (data.busy === true && !busy) || (data.dragging === true && !dragging)
+        || (data.idle === false && idleEnabled) || changed;
+      if (interrupt) { cancelTouch(); stopMotions(); nextMotionAt = performance.now() + 45000; }
       busy = data.busy === true;
-      if (changed) { stopMotions(); nextMotionAt = performance.now() + 45000; }
+      dragging = data.dragging === true;
+      idleEnabled = data.idle !== false;
+      touches = data.touches || {};
       if (!gazeEnabled || !automatic) model.internalModel.focusController.focus(0, 0);
     } else if (data.type === "presence" && ["idle", "attentive", "thinking", "speaking"].includes(data.state)) {
       if (presence === data.state) return;
       presence = data.state;
+      if (presence !== "idle") cancelTouch();
       if (presence !== "idle" && !(presence === "speaking" && replyMotionActive)) stopMotions();
       nextMotionAt = performance.now() + 45000;
       if (automatic && gazeEnabled) model.internalModel.focusController.focus(0, presence === "idle" ? 0 : 0.08);
     } else if (data.type === "gaze") {
-      if (!automatic || !gazeEnabled || presence !== "idle" || !Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
+      if (!automatic || !gazeEnabled || dragging || presence !== "idle" || !Number.isFinite(data.x) || !Number.isFinite(data.y)) return;
       model.internalModel.focusController.focus(Math.max(-0.35, Math.min(0.35, data.x)), Math.max(-0.25, Math.min(0.25, data.y)));
     } else if (data.type === "mouth" && Number.isFinite(data.value)) {
       mouthTarget = Math.max(0, Math.min(1, data.value)); mouthAt = performance.now();
     } else if (data.type === "cycle") {
+      cancelTouch(false);
       expression((expressionIndex + 2) % (metadata.expressions.length + 1) - 1);
     } else if (data.type === "expression" && Number.isInteger(data.index) && data.index >= -1 && data.index < metadata.expressions.length) {
+      cancelTouch(false);
       expression(data.index);
     } else if (data.type === "motion") {
+      cancelTouch();
       motion(data.group, data.index);
     } else if (data.type === "reply-motion") {
       const now = performance.now();
       if (now - replyMotionAt >= 12000 && motion(data.group, data.index, true)) replyMotionAt = now;
-    } else if (data.type === "touch" && automatic && !busy) {
-      pettingUntil = performance.now() + 1200;
-      const group = Object.keys(metadata.motions).find((key) => /^(tapbody|tap_body|touch|tap)$/i.test(key));
-      if (group && metadata.motions[group]) motion(group, 0);
+    } else if (data.type === "touch") {
+      touch(data.kind);
+    } else if (data.type === "locate" && Number.isSafeInteger(data.request)) {
+      notify("location", { request: data.request, kind: locate(data.x, data.y) });
     }
   });
   window.addEventListener("resize", fit);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) application?.ticker.stop();
-    else application?.ticker.start();
+    if (document.hidden) {
+      cancelTouch(); stopMotions();
+      mouthTarget = 0;
+      application?.ticker.stop();
+    } else {
+      nextMotionAt = performance.now() + 45000;
+      application?.ticker.start();
+    }
   });
   notify("boot");
 })();

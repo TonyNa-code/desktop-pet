@@ -15,6 +15,6 @@ The Cubism display bundle also contains Live2D Cubism Framework components, copy
 
 Cubism Core is proprietary and is not included. The optional local importer recognizes the official Core 5.2 file at https://cubism.live2d.com/sdk-web/core/05/live2dcubismcore.min.js, SHA-256 `25ae938cb4fe282ce189b357bcc97e603d1e1f7ec78bf04150d401c23cdc792f`. Its use is subject to the [Live2D Proprietary Software License](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html).
 
-An application which loads user-supplied models may fall within Live2D's expandable-application rules. A free application or an MIT source repository is not itself proof of a publication exemption. See the [official SDK licensing guidance](https://help.live2d.com/zh-CHS/sdk/sdk_001/). Public distribution of this experimental integration is pending licensing clarification.
+Applications which load user-supplied models are subject to Live2D's [expandable-application publication terms](https://www.live2d.com/en/sdk/license/expandable/). The repository's MIT license does not replace those terms or grant an SDK publication license.
 
 No Live2D sample or user model is included in this directory or in the application's character assets.

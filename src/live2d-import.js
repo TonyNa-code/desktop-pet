@@ -137,6 +137,20 @@ function readLive2DPack(source, decodeImage) {
     }
   }
   const model = { Version: 3, FileReferences: cleanRefs };
+  if (raw.HitAreas !== undefined) {
+    if (!Array.isArray(raw.HitAreas) || raw.HitAreas.length > 64) throw new Error("invalid_hit_areas");
+    const usedNames = new Set();
+    model.HitAreas = raw.HitAreas.map((area, index) => {
+      if (!area || typeof area.Id !== "string" || !area.Id.length || area.Id.length > 128
+        || /[\u0000-\u001f\u007f]/.test(area.Id)) throw new Error("invalid_hit_areas");
+      let name = typeof area.Name === "string" ? area.Name.trim().slice(0, 80) : "";
+      if (!name || usedNames.has(name) || /[\u0000-\u001f\u007f]/.test(name)
+        || ["__proto__", "constructor", "prototype"].includes(name)) name = `${area.Id} ${index + 1}`;
+      while (usedNames.has(name)) name += "_";
+      usedNames.add(name);
+      return { Id: area.Id, Name: name };
+    });
+  }
   if (raw.Groups) {
     if (!Array.isArray(raw.Groups) || raw.Groups.length > 8) throw new Error("invalid_groups");
     model.Groups = raw.Groups.filter((group) => group.Target === "Parameter" && ["EyeBlink", "LipSync"].includes(group.Name))

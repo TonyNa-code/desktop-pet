@@ -720,6 +720,16 @@ function normalizeTtsSettings(rawTts = {}) {
   };
 }
 
+function normalizeModelMotion(value) {
+  const valid = value && typeof value.group === "string" && value.group.length <= 80
+    && !/[\u0000-\u001f\u007f]/.test(value.group) && Number.isInteger(value.index) && value.index >= 0 && value.index < 256;
+  return valid ? { group: value.group, index: value.index } : null;
+}
+
+function normalizeModelExpression(value) {
+  return Number.isInteger(value) && value >= 0 && value < 64 ? value : -1;
+}
+
 function normalizePersonaSettings(rawPersona = {}) {
   const raw = { ...DEFAULT_SETTINGS.persona, ...(rawPersona || {}) };
   return {
@@ -733,16 +743,15 @@ function normalizePersonaSettings(rawPersona = {}) {
     background: normalizeLongText(raw.background, 1600),
     extraRules: normalizeLongText(raw.extraRules, 1600),
     live2dGaze: raw.live2dGaze !== false,
-    live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((key) => {
-      const value = raw.live2dExpressions?.[key];
-      return [key, Number.isInteger(value) && value >= 0 && value < 64 ? value : -1];
-    })),
-    live2dMotions: Object.fromEntries(["happy", "shy", "review", "failed"].map((key) => {
-      const value = raw.live2dMotions?.[key];
-      const valid = value && typeof value.group === "string" && value.group.length <= 80
-        && !/[\u0000-\u001f\u007f]/.test(value.group) && Number.isInteger(value.index) && value.index >= 0 && value.index < 256;
-      return [key, valid ? { group: value.group, index: value.index } : null];
-    })),
+    live2dIdle: raw.live2dIdle !== false,
+    live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((key) =>
+      [key, normalizeModelExpression(raw.live2dExpressions?.[key])])),
+    live2dMotions: Object.fromEntries(["happy", "shy", "review", "failed"].map((key) =>
+      [key, normalizeModelMotion(raw.live2dMotions?.[key])])),
+    live2dTouches: Object.fromEntries(["head", "greet"].map((key) => [key, {
+      expression: normalizeModelExpression(raw.live2dTouches?.[key]?.expression),
+      motion: normalizeModelMotion(raw.live2dTouches?.[key]?.motion),
+    }])),
   };
 }
 

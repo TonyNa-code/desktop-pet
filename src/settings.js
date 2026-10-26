@@ -130,7 +130,7 @@ async function mayLeave() {
 }
 
 async function importCharacter(kind) {
-  document.querySelector("#import-status").textContent = "";
+  setImportStatus("");
   try {
     const result = await window.desktopPet.previewCharacterImport(kind);
     if (result.cancelled) return;
@@ -142,7 +142,13 @@ async function importCharacter(kind) {
     document.querySelector("#import-name").textContent = result.name;
     document.querySelector("#import-description").textContent = result.description;
     document.querySelector("#import-preview").hidden = false;
-  } catch { document.querySelector("#import-status").textContent = text("settings.importFailed"); }
+  } catch { setImportStatus("settings.importFailed"); }
+}
+
+function setImportStatus(key) {
+  const status = document.querySelector("#import-status");
+  status.dataset.statusKey = key;
+  status.textContent = key ? text(key) : "";
 }
 
 const DEFAULT_CUSTOM_BODY = "{\"text\":\"{{text}}\"}";
@@ -282,6 +288,7 @@ function refreshLanguageOptions(selectedValue = "system") {
 }
 
 function applyStaticTranslations() {
+  setImportStatus(document.querySelector("#import-status").dataset.statusKey || "");
   document.documentElement.lang = activeLanguage;
   document.title = text("window.settingsTitle");
   document.querySelector("h1").textContent = text("settings.title");
@@ -516,8 +523,15 @@ function renderLive2D(character) {
   document.querySelector("#live2d-panel").hidden = character.type !== "live2d";
   if (character.type !== "live2d") return;
   document.querySelector("#live2d-gaze").checked = config.persona?.live2dGaze !== false;
+  document.querySelector("#live2d-idle").checked = config.persona?.live2dIdle !== false;
   const names = character.expressions || [];
   fillModelExpressions(document.querySelector("#live2d-expression"), names);
+  for (const kind of ["head", "greet"]) {
+    const touch = config.persona?.live2dTouches?.[kind];
+    const index = touch?.expression ?? -1;
+    fillModelExpressions(document.querySelector(`#live2d-touch-${kind}`), names, index < names.length ? index : -1);
+    fillModelMotions(document.querySelector(`#live2d-motion-touch-${kind}`), character.motions, touch?.motion, true);
+  }
   for (const mood of ["happy", "shy", "review", "failed"]) {
     const index = config.persona?.live2dExpressions?.[mood] ?? -1;
     fillModelExpressions(document.querySelector(`#live2d-${mood}`), names, index < names.length ? index : -1);
@@ -707,6 +721,11 @@ function readConfigForm(includeEmptyKey = false) {
     background: personaBackgroundEl.value.trim(),
     extraRules: personaExtraRulesEl.value.trim(),
     live2dGaze: document.querySelector("#live2d-gaze").checked,
+    live2dIdle: document.querySelector("#live2d-idle").checked,
+    live2dTouches: Object.fromEntries(["head", "greet"].map((kind) => [kind, {
+      expression: Number(document.querySelector(`#live2d-touch-${kind}`).value || -1),
+      motion: selectedReplyMotion(`touch-${kind}`),
+    }])),
     live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) =>
       [mood, Number(document.querySelector(`#live2d-${mood}`).value || -1)])),
     live2dMotions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) => [mood, selectedReplyMotion(mood)])),
@@ -995,8 +1014,8 @@ document.querySelector("#confirm-import").addEventListener("click", async () => 
     if (!result.ok) throw new Error();
     applyChatState(result);
     document.querySelector("#import-preview").hidden = true;
-    document.querySelector("#import-status").textContent = text("settings.imported");
-  } catch { document.querySelector("#import-status").textContent = text("settings.importFailed"); }
+    setImportStatus("settings.imported");
+  } catch { setImportStatus("settings.importFailed"); }
 });
 document.querySelector("#remove-character").addEventListener("click", async () => {
   if (!(await mayLeave())) return;
