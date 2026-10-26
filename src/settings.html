@@ -2,8 +2,10 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' file: data:; media-src data: blob:; base-uri 'none'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Desktop Pet Settings</title>
+    <link rel="stylesheet" href="./fonts.css" />
     <link rel="stylesheet" href="./settings.css" />
   </head>
   <body>
@@ -46,6 +48,7 @@
         <div class="button-row">
           <button id="import-folder" type="button" data-i18n="settings.importFolder">导入文件夹</button>
           <button id="import-zip" type="button" data-i18n="settings.importZip">导入 ZIP</button>
+          <button id="import-live2d" type="button" data-i18n="live2d.import">导入 Live2D</button>
           <button id="remove-character" type="button" data-i18n="settings.remove" hidden>移除导入的角色</button>
         </div>
         <div id="import-preview" hidden>
@@ -56,6 +59,49 @@
         </div>
         <p id="import-status" role="status"></p>
         <p class="hint" data-i18n="settings.character.hint">选择角色后保存设置，桌宠窗口会立即切换。</p>
+      </section>
+
+      <section id="live2d-panel" class="panel" hidden>
+        <div class="section-title"><h2>Live2D</h2><span id="live2d-runtime-status" role="status"></span></div>
+        <div class="button-row">
+          <button id="download-core" type="button" data-i18n="live2d.downloadCore">下载 Core 5.2</button>
+          <button id="import-core" type="button" data-i18n="live2d.importCore">安装 Core</button>
+        </div>
+        <label class="check-row"><input id="live2d-gaze" type="checkbox" /><span data-i18n="live2d.gaze">自动模式下看向鼠标</span></label>
+        <label class="check-row"><input id="live2d-idle" type="checkbox" /><span data-i18n="live2d.idle">偶尔播放待机动作</span></label>
+        <div class="split-row">
+          <label><span data-i18n="live2d.expression">表情</span><select id="live2d-expression"></select></label>
+          <label><span data-i18n="live2d.motion">动作</span><select id="live2d-motion"></select></label>
+        </div>
+        <div class="button-row">
+          <button id="preview-expression" type="button" data-i18n="live2d.previewExpression">预览表情</button>
+          <button id="preview-motion" type="button" data-i18n="live2d.previewMotion">预览动作</button>
+          <span id="live2d-action-status" role="status"></span>
+        </div>
+        <h3 data-i18n="live2d.headTouch">摸摸头</h3>
+        <div class="split-row">
+          <label><span data-i18n="live2d.expression">表情</span><select id="live2d-touch-head"></select></label>
+          <label><span data-i18n="live2d.motion">动作</span><select id="live2d-motion-touch-head"></select></label>
+        </div>
+        <h3 data-i18n="live2d.bodyTouch">轻轻碰一下</h3>
+        <div class="split-row">
+          <label><span data-i18n="live2d.expression">表情</span><select id="live2d-touch-greet"></select></label>
+          <label><span data-i18n="live2d.motion">动作</span><select id="live2d-motion-touch-greet"></select></label>
+        </div>
+        <h3 data-i18n="live2d.replyExpressions">回复表情</h3>
+        <div class="split-row">
+          <label><span data-i18n="live2d.happy">开心</span><select id="live2d-happy"></select></label>
+          <label><span data-i18n="live2d.shy">害羞</span><select id="live2d-shy"></select></label>
+          <label><span data-i18n="live2d.review">思考</span><select id="live2d-review"></select></label>
+          <label><span data-i18n="live2d.failed">难过</span><select id="live2d-failed"></select></label>
+        </div>
+        <h3 data-i18n="live2d.replyMotions">回复动作</h3>
+        <div class="split-row">
+          <label><span data-i18n="live2d.happy">开心</span><select id="live2d-motion-happy"></select></label>
+          <label><span data-i18n="live2d.shy">害羞</span><select id="live2d-motion-shy"></select></label>
+          <label><span data-i18n="live2d.review">思考</span><select id="live2d-motion-review"></select></label>
+          <label><span data-i18n="live2d.failed">难过</span><select id="live2d-motion-failed"></select></label>
+        </div>
       </section>
 
       <section class="panel">

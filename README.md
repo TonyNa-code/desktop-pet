@@ -2,14 +2,16 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.5 desktop update:** remember the pet's position, find it from the menu bar or system tray, and keep all windows open when cancelling Quit. [Release notes](docs/releases/v0.4.5.md). Includes the [0.4.3 reply bubble controls](docs/releases/v0.4.3.md) and [0.4.1 safety fixes](docs/releases/v0.4.1.md).
+**0.5.0 companion update:** import a Live2D character, talk beside the pet, and customize touch reactions and reply gestures. Existing sprite characters, settings and window recovery remain available. [Release notes](docs/releases/v0.5.0.md).
+
+**Live2D is optional.** Bring your own compatible exported model and install the supported Core file locally. Neither Core nor sample models are bundled. [Model import, compatibility and licensing](docs/live2d.md).
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
-A cross-platform anime desktop pet for Windows, macOS, and Linux, with character packs, multilingual UI, chat model integration, and optional voice replies. It uses Electron for a transparent always-on-top pet window, and loads each character from a spritesheet plus a small `character.json` action manifest.
+A cross-platform anime desktop pet for Windows, macOS, and Linux, with sprite character packs, optional Live2D models, multilingual UI, chat model integration, and optional voice replies. It uses Electron for a transparent always-on-top pet window. Sprite packs use a spritesheet and a small `character.json` action manifest; Live2D imports use `.model3.json` and its associated files.
 
 <p align="center">
   <img src="docs/desktop-pet-demo.gif" alt="Desktop Pet animated preview" width="256" />
@@ -51,6 +53,7 @@ If you only want to download and run the app, see [快速上手指南.md](快速
 ## Features
 
 - Transparent, frameless, always-on-top pet window
+- Optional Live2D import with blinking, breathing, touch reactions and configurable reply gestures
 - Interface language: follow system, Simplified Chinese, English, Japanese
 - Drag to move, with movement animation while dragging
 - Click, double-click, long press, and mouse hover reactions
@@ -67,6 +70,7 @@ If you only want to download and run the app, see [快速上手指南.md](快速
   - 25-minute focus reminder
   - 30 / 60-minute break reminder
 - Chat:
+  - Input beside the character, with replies above it and a visible menu for settings or quitting
   - Minimal quick input window with replies shown in the pet bubble
   - Small floating chat window
   - Separate chat settings window
@@ -185,7 +189,7 @@ You can edit or remove any line, or clear the list, then save. Each character ha
 
 In automatic expression mode, a head touch or long press, a body tap, and putting the character down after dragging give different local responses using the pack's existing expressions. Built-in characters have distinct short lines, with your preferred name when set. These interactions do not contact a model, play TTS, or increase affection. Short lines do not replace visible replies or reminders, and touches do not interrupt a conversation or voice playback. Turn off **General > Touch responses** for the previous gesture-only behavior.
 
-Click-to-change mode stays manual: one click advances one expression, double-clicks and long presses do not add changes, and dragging restores the expression you selected before the move. Character graphics are unchanged; this is not Live2D.
+Click-to-change mode stays manual: one click advances one expression, double-clicks and long presses do not add changes, and dragging restores the expression you selected before the move. Existing sprite artwork is unchanged. For imported models, see the [Live2D guide](docs/live2d.md).
 
 ## Character Packs
 
@@ -240,3 +244,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, pull request checks, and
 ## License
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
+
+Bundled Chinese and Japanese fallback fonts use the SIL Open Font License 1.1. See the [font notices](assets/fonts/NOTICE.md).

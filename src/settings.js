@@ -130,18 +130,25 @@ async function mayLeave() {
 }
 
 async function importCharacter(kind) {
-  document.querySelector("#import-status").textContent = "";
+  setImportStatus("");
   try {
     const result = await window.desktopPet.previewCharacterImport(kind);
     if (result.cancelled) return;
     if (result.error) throw new Error();
     importToken = result.token;
     document.querySelector("#import-image").src = result.preview;
+    document.querySelector("#import-image").hidden = result.type === "live2d";
     document.querySelector("#import-image").alt = result.name;
     document.querySelector("#import-name").textContent = result.name;
     document.querySelector("#import-description").textContent = result.description;
     document.querySelector("#import-preview").hidden = false;
-  } catch { document.querySelector("#import-status").textContent = text("settings.importFailed"); }
+  } catch { setImportStatus("settings.importFailed"); }
+}
+
+function setImportStatus(key) {
+  const status = document.querySelector("#import-status");
+  status.dataset.statusKey = key;
+  status.textContent = key ? text(key) : "";
 }
 
 const DEFAULT_CUSTOM_BODY = "{\"text\":\"{{text}}\"}";
@@ -281,6 +288,7 @@ function refreshLanguageOptions(selectedValue = "system") {
 }
 
 function applyStaticTranslations() {
+  setImportStatus(document.querySelector("#import-status").dataset.statusKey || "");
   document.documentElement.lang = activeLanguage;
   document.title = text("window.settingsTitle");
   document.querySelector("h1").textContent = text("settings.title");
@@ -440,10 +448,15 @@ function renderCharacterCards() {
     card.classList.toggle("selected", character.id === selectedCharacterId);
     card.setAttribute("aria-pressed", character.id === selectedCharacterId ? "true" : "false");
 
-    const image = document.createElement("img");
-    image.src = character.previewPath || character.spritePath || "";
-    image.alt = character.name;
-    image.loading = "lazy";
+    const image = document.createElement(character.type === "live2d" ? "span" : "img");
+    if (character.type === "live2d") {
+      image.className = "live2d-badge";
+      image.textContent = "Live2D";
+    } else {
+      image.src = character.previewPath || character.spritePath || "";
+      image.alt = character.name;
+      image.loading = "lazy";
+    }
 
     const content = document.createElement("span");
     const name = document.createElement("b");
@@ -453,7 +466,7 @@ function renderCharacterCards() {
     description.className = "description";
     description.textContent = character.description || text("settings.character.noDescription");
     meta.className = "meta";
-    meta.textContent = text("settings.character.meta", {
+    meta.textContent = character.type === "live2d" ? text("live2d.modelMeta", { count: character.expressions?.length || 0 }) : text("settings.character.meta", {
       actions: character.stateCount || 0,
       click: character.clickActionCount || 0,
     });
@@ -472,6 +485,69 @@ function renderCharacterCards() {
     characterGridEl.append(card);
   }
   document.querySelector("#remove-character").hidden = !activeCharacter.imported;
+  renderLive2D(activeCharacter);
+}
+
+function fillModelExpressions(select, names, value = -1) {
+  select.textContent = "";
+  [text("live2d.neutral"), ...names].forEach((name, index) => {
+    const option = document.createElement("option");
+    option.value = String(index - 1); option.textContent = name; select.append(option);
+  });
+  select.value = String(value);
+}
+
+function fillModelMotions(select, motions, selected = null, optional = false) {
+  select.textContent = "";
+  if (optional) {
+    const option = document.createElement("option");
+    option.value = ""; option.textContent = text("live2d.noMotion"); select.append(option);
+  }
+  for (const [group, count] of Object.entries(motions || {})) {
+    for (let index = 0; index < count; index++) {
+      const option = document.createElement("option");
+      option.value = JSON.stringify({ group, index });
+      option.textContent = `${group || text("live2d.motion")} ${index + 1}`; select.append(option);
+    }
+  }
+  if (optional) select.value = selected && Object.hasOwn(motions || {}, selected.group) && selected.index < motions[selected.group]
+    ? JSON.stringify({ group: selected.group, index: selected.index }) : "";
+}
+
+function selectedReplyMotion(mood) {
+  try { return JSON.parse(document.querySelector(`#live2d-motion-${mood}`).value || "null"); }
+  catch { return null; }
+}
+
+function renderLive2D(character) {
+  document.querySelector("#live2d-panel").hidden = character.type !== "live2d";
+  if (character.type !== "live2d") return;
+  document.querySelector("#live2d-gaze").checked = config.persona?.live2dGaze !== false;
+  document.querySelector("#live2d-idle").checked = config.persona?.live2dIdle !== false;
+  const names = character.expressions || [];
+  fillModelExpressions(document.querySelector("#live2d-expression"), names);
+  for (const kind of ["head", "greet"]) {
+    const touch = config.persona?.live2dTouches?.[kind];
+    const index = touch?.expression ?? -1;
+    fillModelExpressions(document.querySelector(`#live2d-touch-${kind}`), names, index < names.length ? index : -1);
+    fillModelMotions(document.querySelector(`#live2d-motion-touch-${kind}`), character.motions, touch?.motion, true);
+  }
+  for (const mood of ["happy", "shy", "review", "failed"]) {
+    const index = config.persona?.live2dExpressions?.[mood] ?? -1;
+    fillModelExpressions(document.querySelector(`#live2d-${mood}`), names, index < names.length ? index : -1);
+    fillModelMotions(document.querySelector(`#live2d-motion-${mood}`), character.motions, config.persona?.live2dMotions?.[mood], true);
+  }
+  const motionSelect = document.querySelector("#live2d-motion");
+  fillModelMotions(motionSelect, character.motions);
+  document.querySelector("#preview-motion").disabled = !motionSelect.options.length;
+  refreshRuntimeStatus();
+}
+
+async function refreshRuntimeStatus() {
+  try {
+    const state = await window.desktopPet.getLive2DRuntime();
+    document.querySelector("#live2d-runtime-status").textContent = text(state.ready ? "live2d.runtimeReady" : "live2d.runtimeNeeded");
+  } catch { document.querySelector("#live2d-runtime-status").textContent = text("live2d.runtimeFailed"); }
 }
 
 function renderConfig(preserveDraft = false) {
@@ -644,6 +720,15 @@ function readConfigForm(includeEmptyKey = false) {
     speakingStyle: personaSpeakingStyleEl.value.trim(),
     background: personaBackgroundEl.value.trim(),
     extraRules: personaExtraRulesEl.value.trim(),
+    live2dGaze: document.querySelector("#live2d-gaze").checked,
+    live2dIdle: document.querySelector("#live2d-idle").checked,
+    live2dTouches: Object.fromEntries(["head", "greet"].map((kind) => [kind, {
+      expression: Number(document.querySelector(`#live2d-touch-${kind}`).value || -1),
+      motion: selectedReplyMotion(`touch-${kind}`),
+    }])),
+    live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) =>
+      [mood, Number(document.querySelector(`#live2d-${mood}`).value || -1)])),
+    live2dMotions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) => [mood, selectedReplyMotion(mood)])),
   };
   const affection = {
     enabled: affectionEnabledEl.checked,
@@ -901,6 +986,27 @@ window.addEventListener("beforeunload", (event) => {
 });
 document.querySelector("#import-folder").addEventListener("click", () => importCharacter("folder"));
 document.querySelector("#import-zip").addEventListener("click", () => importCharacter("zip"));
+document.querySelector("#import-live2d").addEventListener("click", () => importCharacter("live2d"));
+document.querySelector("#download-core").addEventListener("click", () => window.desktopPet.openLive2DDownload());
+document.querySelector("#import-core").addEventListener("click", async () => {
+  try {
+    const result = await window.desktopPet.importLive2DRuntime();
+    if (result.cancelled) return;
+    if (!result.ok) throw new Error();
+    await refreshRuntimeStatus();
+  } catch { document.querySelector("#live2d-runtime-status").textContent = text("live2d.runtimeFailed"); }
+});
+document.querySelector("#preview-expression").addEventListener("click", async () => {
+  try { await window.desktopPet.performModelAction({ type: "expression", index: Number(document.querySelector("#live2d-expression").value) }); }
+  catch { document.querySelector("#live2d-action-status").textContent = text("live2d.actionFailed"); }
+});
+document.querySelector("#preview-motion").addEventListener("click", async () => {
+  try {
+    const action = JSON.parse(document.querySelector("#live2d-motion").value);
+    const result = await window.desktopPet.performModelAction({ type: "motion", ...action });
+    document.querySelector("#live2d-action-status").textContent = result ? "" : text("live2d.actionFailed");
+  } catch { document.querySelector("#live2d-action-status").textContent = text("live2d.actionFailed"); }
+});
 document.querySelector("#cancel-import").addEventListener("click", () => { importToken = null; document.querySelector("#import-preview").hidden = true; });
 document.querySelector("#confirm-import").addEventListener("click", async () => {
   try {
@@ -908,8 +1014,8 @@ document.querySelector("#confirm-import").addEventListener("click", async () => 
     if (!result.ok) throw new Error();
     applyChatState(result);
     document.querySelector("#import-preview").hidden = true;
-    document.querySelector("#import-status").textContent = text("settings.imported");
-  } catch { document.querySelector("#import-status").textContent = text("settings.importFailed"); }
+    setImportStatus("settings.imported");
+  } catch { setImportStatus("settings.importFailed"); }
 });
 document.querySelector("#remove-character").addEventListener("click", async () => {
   if (!(await mayLeave())) return;

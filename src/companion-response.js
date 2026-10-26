@@ -1,6 +1,6 @@
 function expressionInstruction(states) {
   const allowed = Object.keys(states).filter((name) => /^[a-zA-Z][a-zA-Z0-9]{0,40}$/.test(name));
-  return `You are speaking as the character beside the user's desktop. Reply naturally in character, usually in one to three sentences unless the user asks for more. Do not narrate software status or numeric energy. Start with exactly one expression marker chosen from: ${allowed.map((name) => `[expression:${name}]`).join(" ")}. Then write the spoken reply. The marker controls the character's expression and is not spoken. Do not invent other markers.`;
+  return `You are speaking as the character beside the user's desktop. Reply naturally in character, usually in one to three sentences unless the user asks for more. Respond to the specific thing they shared; avoid support-agent introductions, routine offers of help, and a question at the end of every reply. Keep warmth consistent with the chosen personality and relationship, without inventing shared memories, claiming to see their screen, or pressuring them to stay. Do not narrate software status or numeric energy. Start with exactly one expression marker chosen from: ${allowed.map((name) => `[expression:${name}]`).join(" ")}. Then write the spoken reply. The marker controls the character's expression and is not spoken. Do not invent other markers.`;
 }
 
 function parseCompanionReply(raw, states, partial = false) {

@@ -62,7 +62,10 @@ function loadRenderer(file, api = {}, htmlFile = file.replace(/\.js$/, ".html"))
       children: [], append(...children) { this.children.push(...children); }, replaceChildren(...children) { this.children = children; },
       focus() {}, blur() {}, remove() {}, setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} },
       querySelector() { return element(); },
-      addEventListener(name, callback) { this.events[name] = callback; },
+      addEventListener(name, callback) {
+        const previous = this.events[name];
+        this.events[name] = previous ? (...args) => { previous(...args); return callback(...args); } : callback;
+      },
     };
   }
   const document = {
@@ -79,17 +82,17 @@ function loadRenderer(file, api = {}, htmlFile = file.replace(/\.js$/, ".html"))
     createElement: element,
   };
   const context = vm.createContext({
-    document, console, Intl, Date,
+    document, console, Intl, Date, Event,
     window: {
       DesktopPetI18n: i18n,
       DesktopPetValidation: require("../src/config-validation"),
       DesktopPetLlmPresets: require("../src/llm-presets"),
-      addEventListener() {}, close() {},
+      addEventListener() {}, dispatchEvent() {}, close() {},
       desktopPet: { getChatState: () => new Promise(() => {}), onChatStateUpdated() {},
         setChatDraft() {}, onChatDraftUpdated() {}, onAppQuitRequested() {}, confirmAppQuit() {}, ...api },
     },
   });
-  if (["chat.js", "quick-chat.js"].includes(file)) {
+  if (["chat.js", "quick-chat.js", "companion-input.js"].includes(file)) {
     vm.runInContext(fs.readFileSync(path.join(sourceDir, "chat-draft.js"), "utf8"), context);
   }
   vm.runInContext(fs.readFileSync(path.join(sourceDir, file), "utf8"), context);

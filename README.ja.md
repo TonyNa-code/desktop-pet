@@ -2,14 +2,16 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.5 デスクトップ操作の改善：**ペットの位置を記憶し、メニューバーやシステムトレイから再表示できます。終了をキャンセルした場合はすべてのウィンドウを保持します。[更新内容](docs/releases/v0.4.5.md)。[0.4.3 の吹き出し操作](docs/releases/v0.4.3.md)と [0.4.1 の安全性修正](docs/releases/v0.4.1.md)も含みます。
+**0.5.0 コンパニオン更新：**Live2D キャラクターを追加し、ペットのそばで会話できます。触れ合いの反応や返答時の動作も選べます。既存の画像キャラクター、設定、位置の復元はそのまま使えます。[更新内容](docs/releases/v0.5.0.md)。
+
+**Live2D は任意の機能です。**対応する書き出し済みモデルと Core ファイルを端末に導入してください。Core とサンプルモデルは同梱されません。[モデル導入・互換性・利用条件](docs/live2d.md#日本語)。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
-Windows / macOS / Linux で動くアニメ風デスクトップペットです。キャラクターパック、多言語UI、チャットモデル連携、任意の音声読み上げに対応しています。Electron で透明な常時手前表示ウィンドウを作り、各キャラクターは spritesheet、プレビュー画像、`character.json` から読み込みます。
+Windows / macOS / Linux で動くアニメ風デスクトップペットです。画像キャラクターパック、任意の Live2D モデル、多言語UI、チャットモデル連携、音声読み上げに対応しています。Electron で透明な常時手前表示ウィンドウを作ります。画像キャラクターは spritesheet と `character.json`、Live2D は `.model3.json` と関連ファイルから読み込みます。
 
 <p align="center">
   <img src="docs/desktop-pet-demo.gif" alt="Desktop Pet animated preview" width="256" />
@@ -51,6 +53,7 @@ macOS で開発元を確認できないと表示された場合は、app を右�
 ## 機能
 
 - 透明、フレームなし、常に手前の小さなペットウィンドウ
+- Live2D の追加、まばたき・呼吸・触れ合いの反応・返答時の動作の設定
 - 表示言語：システムに合わせる、簡体字中国語、English、日本語
 - ドラッグ移動中に移動アニメーションを再生
 - クリック、ダブルクリック、長押し、マウスホバーに反応
@@ -67,6 +70,7 @@ macOS で開発元を確認できないと表示された場合は、app を右�
   - 25分集中リマインダー
   - 30 / 60分休憩リマインダー
 - 会話機能：
+  - ペット横の入力欄と上部の吹き出し。横のメニューから設定や終了を選択
   - 返信をペットの吹き出しに表示するクイック入力ウィンドウ
   - 小さなフローティングチャットウィンドウ
   - 独立した会話設定ウィンドウ
@@ -178,7 +182,7 @@ API key はこの端末だけに保存されます。利用できる場合はOS�
 
 自動表情モードでは、頭をなでる・長押しする、体を軽くクリックする、ドラッグして置く操作に、それぞれ異なるローカルの反応があります。既存の表情を使い、組み込みキャラクターごとの一言と設定した呼び名で応えます。モデルや音声サービスは呼び出さず、好感度も増えません。表示中の返信や通知を上書きせず、会話や音声を中断しません。**一般 > ふれあいの一言** をオフにすると従来の動作のみになります。
 
-クリック限定モードは手動のままです。1回のクリックで表情が1つ進み、ダブルクリック・長押しでは追加変更せず、ドラッグ後は選んでいた表情に戻ります。画像の変更やLive2Dの追加はありません。
+クリック限定モードは手動のままです。1回のクリックで表情が1つ進み、ダブルクリック・長押しでは追加変更せず、ドラッグ後は選んでいた表情に戻ります。既存の画像は変更していません。追加モデルの操作は [Live2D ガイド](docs/live2d.md#日本語)をご覧ください。
 
 ## キャラクターパック
 
@@ -233,3 +237,5 @@ assets/characters/
 ## License
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
+
+同梱の中国語・日本語フォントには SIL Open Font License 1.1 が適用されます。[フォントの利用条件](assets/fonts/NOTICE.md)をご覧ください。

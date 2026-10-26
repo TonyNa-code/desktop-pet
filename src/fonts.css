@@ -1,0 +1,25 @@
+@font-face {
+  font-family: "Desktop Pet CJK SC";
+  src: url("../assets/fonts/NotoSansSC-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+2000-206F, U+2E80-9FFF, U+F900-FAFF, U+FE00-FE6F, U+FF00-FFEF, U+20000-3FFFF;
+}
+
+@font-face {
+  font-family: "Desktop Pet CJK JP";
+  src: url("../assets/fonts/NotoSansJP-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+2000-206F, U+2E80-9FFF, U+F900-FAFF, U+FE00-FE6F, U+FF00-FFEF, U+20000-3FFFF;
+}
+
+:root {
+  --pet-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Desktop Pet CJK SC", "Desktop Pet CJK JP", sans-serif;
+}
+
+:root:lang(ja) {
+  --pet-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Desktop Pet CJK JP", "Desktop Pet CJK SC", sans-serif;
+}

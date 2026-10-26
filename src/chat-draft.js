@@ -1,6 +1,6 @@
 (() => {
   window.DesktopPetDraft = {
-    create(input) {
+    create(input, { autofocus = true } = {}) {
       input.disabled = true;
       let context = null;
       let composing = false;
@@ -50,7 +50,7 @@
           replace(draft.text);
           if (earlyUpdate) { receive(earlyUpdate); earlyUpdate = null; }
           input.disabled = false;
-          if (initial && document.activeElement === document.body) input.focus();
+          if (initial && autofocus && document.activeElement === document.body) input.focus();
         },
         clearIfMatches(text) {
           if (input.value.trim() !== text.trim()) return;

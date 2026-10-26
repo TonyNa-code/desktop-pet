@@ -8,6 +8,7 @@ const bubblePin = document.querySelector("#bubble-pin");
 const bubbleDismiss = document.querySelector("#bubble-dismiss");
 const lastReplyButton = document.querySelector("#last-reply");
 const talkButton = document.querySelector("#talk");
+const petMenuButton = document.querySelector("#pet-menu");
 const ctx = canvas.getContext("2d", { alpha: true });
 const i18n = window.DesktopPetI18n;
 const SINGLE_CLICK_DELAY = 280;
@@ -68,6 +69,7 @@ let didDrag = false;
 let clickTimer;
 let clickOnlyReadyAt = 0;
 let ignoreSingleClicksUntil = 0;
+let interactionTicket = 0;
 let hoverReadyAt = 0;
 let bubbleTimer;
 let didShowStartupGreeting = false;
@@ -81,6 +83,7 @@ let speechActive = false;
 let speechWatchdog;
 let conversationActive = false;
 let conversationAction = "idle";
+let lastReplyGestureId = null;
 let queuedNotice = null;
 let bubbleVisible = false;
 let interactionReadyAt = 0;
@@ -104,7 +107,7 @@ function draw() {
 
 function applyPetLayout() {
   const availableScale = Math.min(Number.isFinite(window.innerWidth) ? window.innerWidth / 192 : Infinity,
-    Number.isFinite(window.innerHeight) ? Math.max(0, window.innerHeight - 160) / 208 : Infinity);
+    Number.isFinite(window.innerHeight) ? Math.max(0, window.innerHeight - 160 - (window.DesktopPetCompanionInput?.isOpen() ? 88 : 0)) / 208 : Infinity);
   const scale = Math.min(settings.scale, availableScale);
   const petWidth = Math.round(192 * scale);
   const petHeight = Math.round(208 * scale);
@@ -114,6 +117,7 @@ function applyPetLayout() {
 
 function startAnimation() {
   window.clearInterval(animationTimer);
+  if (character.type === "live2d") return;
   const current = character.states[state] || character.states.idle;
   animationTimer = window.setInterval(() => {
     if (settings.expressionMode === "clickOnly" && !dragStart) {
@@ -133,13 +137,17 @@ function setState(nextState) {
   if (!character.states[nextState]) return;
   if (state === nextState) return;
   state = nextState;
+  if (character.type === "live2d") {
+    if (settings.expressionMode === "automatic") window.DesktopPetModel?.expression(settings.persona?.live2dExpressions?.[nextState] ?? -1);
+    return;
+  }
   frameIndex = 0;
   startAnimation();
 }
 
 function scheduleIdleBehavior() {
   window.clearTimeout(idleTimer);
-  if (settings.expressionMode !== "automatic" || conversationActive) return;
+  if (character.type === "live2d" || settings.expressionMode !== "automatic" || conversationActive) return;
 
   const delay = 22000 + Math.random() * 15000;
   idleTimer = window.setTimeout(() => {
@@ -230,6 +238,7 @@ function applyAppState(nextAppState = {}) {
     interactionResponses: nextAppState.settings?.interactionResponses !== false,
     userName: nextAppState.settings?.persona?.userName || "",
     characterName: nextAppState.settings?.persona?.name || character.name,
+    persona: nextAppState.settings?.persona || {},
     scale: Number(nextAppState.settings?.scale) || 1,
     alwaysOnTop: nextAppState.settings?.alwaysOnTop !== false,
     tts: {
@@ -254,11 +263,23 @@ function applyAppState(nextAppState = {}) {
     if (bubbleVisible) hideBubbleLater(Math.max(3000, bubbleRemaining));
   }
   activeLanguage = settings.resolvedLanguage;
-  talkButton.textContent = text("pet.talk");
   talkButton.title = text("quick.toCharacter", { name: settings.characterName });
+  talkButton.setAttribute("aria-label", talkButton.title);
   updateBubbleControls();
   document.documentElement.lang = activeLanguage;
   applyPetLayout();
+  window.DesktopPetModel?.apply(character, settings, conversationActive || speechActive);
+
+  if (character.type === "live2d") {
+    ++spriteLoadToken;
+    spriteImage = null;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    window.clearInterval(animationTimer);
+    window.clearTimeout(idleTimer);
+    if (characterChanged || modeChanged) resetAfterSettingsChange();
+    scheduleStartupGreeting();
+    return;
+  }
 
   if (characterChanged || !spriteImage) {
     const token = ++spriteLoadToken;
@@ -283,6 +304,7 @@ function applyAppState(nextAppState = {}) {
 }
 
 function resetAfterSettingsChange() {
+  interactionTicket++;
   window.clearTimeout(clickTimer);
   ignoreSingleClicksUntil = 0;
   clickOnlyReadyAt = 0;
@@ -290,6 +312,11 @@ function resetAfterSettingsChange() {
   temporaryToken += 1;
   state = "idle";
   frameIndex = 0;
+  if (character.type === "live2d") {
+    window.DesktopPetModel?.expression(-1);
+    scheduleStartupGreeting();
+    return;
+  }
   if (settings.expressionMode === "clickOnly") {
     window.clearTimeout(idleTimer);
     const currentIndex = character.staticExpressions.findIndex((expression) => expression.state === "idle" && expression.frame === 0);
@@ -305,15 +332,16 @@ function resetAfterSettingsChange() {
 
 function respondToInteraction(kind) {
   if (settings.expressionMode !== "automatic" || !settings.interactionResponses
-    || conversationActive || speechActive) return;
+    || conversationActive || speechActive || window.DesktopPetCompanionInput?.isOpen()) return;
   const choices = kind === "head" ? ["shy", "happy", "review", "idle"]
     : kind === "drop" ? ["tsundereProud", "happy", "waving", "idle"] : ["waving", "happy", "idle"];
   const action = choices.find((name) => character.states[name]);
-  if (action) playTemporary(action, 1400);
+  if (character.type === "live2d") window.DesktopPetModel?.touch(kind);
+  else if (action) playTemporary(action, 1400);
   // Touches stay local and quiet; they neither replace a visible reply nor queue up.
   if (bubbleVisible || performance.now() < interactionReadyAt) return;
   interactionReadyAt = performance.now() + 6000;
-  const style = character.id === "luna" ? "luna" : "default";
+  const style = settings.persona?.relationship === "partner" ? "partner" : character.id === "luna" ? "luna" : "default";
   const variant = interactionVariants[kind]++ % 2;
   const line = text(`pet.interaction.${style}.${kind}.${variant}`);
   showBubble(settings.userName ? text("pet.interaction.address", { name: settings.userName, line }) : line);
@@ -322,42 +350,53 @@ function respondToInteraction(kind) {
 function handleClick(kind = "greet") {
   window.desktopPet.recordInteraction("click");
   if (settings.expressionMode === "clickOnly") {
+    if (character.type === "live2d") { window.DesktopPetModel?.cycle(); return; }
     const [nextState, nextFrame] = nextStaticExpression();
     setStaticExpression(nextState, nextFrame);
   } else {
-    if (conversationActive || speechActive) return;
+    if (conversationActive || speechActive || window.DesktopPetCompanionInput?.isOpen()) return;
     if (settings.interactionResponses) { respondToInteraction(kind); return; }
+    if (character.type === "live2d") { window.DesktopPetModel?.touch(kind); return; }
     const nextState = nextClickState();
     playTemporary(nextState);
   }
 }
 
 function handleDoubleClick() {
+  interactionTicket++;
   window.clearTimeout(clickTimer);
-  if (settings.expressionMode === "clickOnly" || conversationActive || speechActive) return;
+  if (character.type === "live2d" || settings.expressionMode === "clickOnly" || conversationActive || speechActive) return;
   ignoreSingleClicksUntil = performance.now() + 360;
   window.desktopPet.recordInteraction("doubleClick");
   playTemporary("jumping", 1200);
 }
 
-function handleLongPress() {
+function handleLongPress(kind = "head") {
   window.clearTimeout(clickTimer);
   if (settings.expressionMode === "clickOnly" || conversationActive || speechActive) return;
   window.desktopPet.recordInteraction("longPress");
   if (settings.interactionResponses) {
-    respondToInteraction("head");
+    respondToInteraction(kind);
+  } else if (character.type === "live2d") {
+    window.DesktopPetModel?.touch(kind);
   } else {
     playTemporary("review", 1400);
   }
 }
 
-function scheduleSingleClick(kind) {
+function scheduleSingleClick(kind, point, longPress = false) {
   window.clearTimeout(clickTimer);
   const scheduledAt = performance.now();
-  clickTimer = window.setTimeout(() => {
+  const token = ++interactionTicket;
+  clickTimer = window.setTimeout(async () => {
     if (scheduledAt < ignoreSingleClicksUntil) return;
-    handleClick(kind);
-  }, SINGLE_CLICK_DELAY);
+    if (character.type === "live2d" && point) {
+      kind = await window.DesktopPetModel?.locate(point.x, point.y);
+      if (!kind || token !== interactionTicket || dragStart || settings.expressionMode !== "automatic") return;
+    }
+    if (longPress) handleLongPress(kind);
+    else handleClick(kind);
+  }, longPress ? 0 : SINGLE_CLICK_DELAY);
 }
 
 function handleClickOnlyPointerClick() {
@@ -369,6 +408,7 @@ function handleClickOnlyPointerClick() {
 
 function beginDrag(event) {
   if (event.button !== 0) return;
+  interactionTicket++;
   window.clearTimeout(clickTimer);
   const bounds = canvas.getBoundingClientRect();
   dragStart = {
@@ -376,6 +416,7 @@ function beginDrag(event) {
     y: event.screenY,
     time: performance.now(),
     kind: (event.clientY - bounds.top) / bounds.height < 0.46 ? "head" : "greet",
+    point: { x: (event.clientX - bounds.left) / bounds.width, y: (event.clientY - bounds.top) / bounds.height },
     expression: { state, frame: frameIndex },
   };
   didDrag = false;
@@ -393,6 +434,7 @@ function beginDrag(event) {
     }
     if (dragStart !== activeDrag) return;
     if (Math.abs(movement.dx) > 2 || Math.abs(movement.dy) > 2) {
+      if (!didDrag) window.DesktopPetModel?.dragging(true);
       didDrag = true;
       if (Math.abs(movement.dx) > 4) {
         setState(movement.dx > 0 ? "runningRight" : "runningLeft");
@@ -410,8 +452,9 @@ function endDrag(event) {
   canvas.classList.remove("dragging");
 
   const heldDuration = performance.now() - dragStart.time;
-  const { kind, expression } = dragStart;
+  const { kind, point, expression, clickCount } = dragStart;
   dragStart = null;
+  window.DesktopPetModel?.dragging(false);
 
   if (didDrag) {
     didDrag = false;
@@ -426,16 +469,19 @@ function endDrag(event) {
   }
 
   if (heldDuration > 450) {
-    if (settings.expressionMode !== "clickOnly") handleLongPress();
+    if (settings.expressionMode !== "clickOnly") {
+      if (character.type === "live2d") scheduleSingleClick(kind, point, true);
+      else handleLongPress();
+    }
     return;
   }
   if (settings.expressionMode === "clickOnly") {
-    if (event.detail > 1) return;
+    if (event.detail > 1 || clickCount > 1) return;
     handleClickOnlyPointerClick();
     return;
   }
   if (event.detail > 1) return;
-  scheduleSingleClick(kind);
+  scheduleSingleClick(kind, point);
 }
 
 let bubbleDeadline = 0;
@@ -454,7 +500,7 @@ function updateBubbleControls() {
   bubbleSpeaker.title = name;
   for (const [button, key] of [[bubbleReply, "pet.reply"], [bubbleHistory, "pet.openChat"],
     [bubblePin, bubblePinned ? "pet.unpinReply" : "pet.pinReply"], [bubbleDismiss, "pet.dismissReply"],
-    [lastReplyButton, "pet.lastReply"]]) {
+    [lastReplyButton, "pet.lastReply"], [petMenuButton, "pet.menu"]]) {
     button.title = text(key);
     button.setAttribute("aria-label", button.title);
   }
@@ -474,6 +520,7 @@ function dismissBubble() {
   updateBubbleControls();
   conversationActive = false;
   conversationAction = "idle";
+  window.DesktopPetModel?.busy(speechActive);
   temporaryToken += 1;
   if (settings.expressionMode === "automatic" && !dragStart) setState("idle");
   scheduleIdleBehavior();
@@ -555,10 +602,11 @@ bubblePin.addEventListener("click", () => {
   updateBubbleControls();
   hideBubbleLater(Math.max(3000, bubbleRemaining));
 });
-bubbleReply.addEventListener("click", () => window.desktopPet.openQuickChatWindow());
+bubbleReply.addEventListener("click", () => window.DesktopPetCompanionInput?.open());
 bubbleHistory.addEventListener("click", () => window.desktopPet.openChatWindow());
 lastReplyButton.addEventListener("click", () => window.desktopPet.showLastReply());
-talkButton.addEventListener("click", () => window.desktopPet.openQuickChatWindow());
+talkButton.addEventListener("click", () => window.DesktopPetCompanionInput?.toggle());
+petMenuButton.addEventListener("click", () => window.desktopPet.showContextMenu());
 
 function finishSpeech(token, failed = false) {
   if (token !== speechToken) return;
@@ -584,6 +632,8 @@ function chooseTtsVoice() {
 function stopSpeech(status = "idle") {
   speechToken += 1;
   speechActive = false;
+  window.DesktopPetModel?.stopMouth();
+  window.DesktopPetModel?.busy(conversationActive);
   if (speechId !== null) window.desktopPet.speechStateChanged({ id: speechId, status });
   speechId = null;
   window.clearTimeout(speechWatchdog);
@@ -602,6 +652,7 @@ async function speakText(text) {
   const token = speechToken;
   if (!settings.tts?.enabled || settings.tts.provider === "none" || !String(text || "").trim()) return;
   speechActive = true;
+  window.DesktopPetModel?.busy(true);
   window.clearTimeout(bubbleTimer);
   try {
     const id = await window.desktopPet.beginSpeech(speechGeneration);
@@ -630,6 +681,7 @@ async function speakText(text) {
           activeAudio.onended = playNext;
           activeAudio.onerror = () => finishSpeech(token, true);
           await activeAudio.play();
+          if (token === speechToken) window.DesktopPetModel?.attachAudio(activeAudio);
           if (token === speechToken) window.desktopPet.speechStateChanged({ id, status: "playing" });
         } else {
           if (!("speechSynthesis" in window)) { finishSpeech(token, true); return; }
@@ -685,6 +737,7 @@ function handlePetMessage(message = {}) {
   if (isChat) {
     if (!conversationActive || (!wasStreaming && bubbleStreaming)) conversationAction = "idle";
     conversationActive = true;
+    window.DesktopPetModel?.busy(true);
     if (action && character.states[action]) conversationAction = action;
     window.clearTimeout(idleTimer);
     temporaryToken += 1;
@@ -697,6 +750,11 @@ function handlePetMessage(message = {}) {
   if (settings.expressionMode === "automatic" && !dragStart) {
     if (isChat) setState(conversationAction);
     else if (action && character.states[action]) playTemporary(action, Math.max(temporaryDuration(action), 1200));
+    if (isChat && character.type === "live2d" && !message.streaming && message.replyMotion
+      && Number.isSafeInteger(message.presentationId) && message.presentationId !== lastReplyGestureId) {
+      lastReplyGestureId = message.presentationId;
+      window.DesktopPetModel?.replyMotion(message.replyMotion);
+    }
   }
   if (message.notification) window.desktopPet.presentNotification?.(message.notification);
 }
@@ -730,14 +788,26 @@ function loadSprite(spritePath) {
 }
 
 canvas.addEventListener("pointerdown", beginDrag);
+// PointerEvent.detail can be zero; mousedown retains the platform's click count.
+canvas.addEventListener("mousedown", event => { if (dragStart) dragStart.clickCount = event.detail; });
+canvas.addEventListener("pointermove", (event) => {
+  if (dragStart || character.type !== "live2d") return;
+  const bounds = canvas.getBoundingClientRect();
+  window.DesktopPetModel?.gaze((event.clientX - bounds.left) / bounds.width * 0.7 - 0.35,
+    0.25 - (event.clientY - bounds.top) / bounds.height * 0.5);
+});
+canvas.addEventListener("pointerleave", () => window.DesktopPetModel?.gaze(0, 0));
 canvas.addEventListener("dblclick", handleDoubleClick);
 canvas.addEventListener("pointerenter", () => {
+  if (character.type === "live2d") return;
   if (settings.expressionMode !== "automatic" || conversationActive || dragStart || performance.now() < hoverReadyAt) return;
   hoverReadyAt = performance.now() + 10000;
   if (state === "idle") playTemporary("waving", 900);
 });
 window.addEventListener("pointerup", endDrag);
 function cancelDrag() {
+  interactionTicket++;
+  window.DesktopPetModel?.dragging(false);
   if (!dragStart) return;
   const expression = dragStart.expression;
   dragStart = null;

@@ -2,14 +2,16 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
-**0.4.5 桌面体验更新：**记住桌宠位置，可从菜单栏或系统托盘找回桌宠；取消退出时保留所有窗口。[更新说明](docs/releases/v0.4.5.md)。包含 [0.4.3 气泡交互](docs/releases/v0.4.3.md)与 [0.4.1 安全修复](docs/releases/v0.4.1.md)。
+**0.5.0 陪伴体验更新：**导入 Live2D 角色，在人物身旁对话，自定义触碰反应与回复动作。原有图片角色、设置和窗口找回功能继续保留。[更新说明](docs/releases/v0.5.0.md)。
+
+**Live2D 是可选功能。**需要自行导入兼容的导出模型，并在本机安装受支持的 Core 文件。安装包不附带 Core 或示例模型。[模型导入、兼容性与许可说明](docs/live2d.md#简体中文)。
 
 [![Build](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg)](https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml)
 [![Latest Release](https://img.shields.io/github/v/release/TonyNa-code/desktop-pet?label=latest%20release)](https://github.com/TonyNa-code/desktop-pet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
-一个可以在 Windows / macOS / Linux 上运行的二次元桌宠项目，支持角色包、多语言界面、聊天模型接入和可选语音朗读。它使用 Electron 做透明置顶窗口，每个角色由 spritesheet、预览图和 `character.json` 动作配置加载。
+一个可以在 Windows / macOS / Linux 上运行的二次元桌宠项目，支持图片角色包、可选 Live2D 模型、多语言界面、聊天模型接入和可选语音朗读。它使用 Electron 做透明置顶窗口；图片角色由 spritesheet、预览图和 `character.json` 动作配置加载，Live2D 角色使用 `.model3.json` 及其配套文件。
 
 <p align="center">
   <img src="docs/desktop-pet-demo.gif" alt="Desktop Pet animated preview" width="256" />
@@ -51,6 +53,7 @@ macOS 如果提示无法验证开发者，右键 app 选择 `打开`，再确认
 ## 功能
 
 - 透明、无边框、置顶小窗口
+- 可选 Live2D 模型导入，支持眨眼、呼吸、触碰反应与自定义回复动作
 - 界面语言支持跟随系统、简体中文、English、日本語
 - 鼠标拖拽移动，拖动时自动播放移动动画
 - 左键点击、双击、长按、鼠标靠近都会触发不同反应
@@ -67,6 +70,7 @@ macOS 如果提示无法验证开发者，右键 app 选择 `打开`，再确认
   - 25 分钟专注提醒
   - 30 / 60 分钟休息提醒
 - 对话功能：
+  - 人物旁展开输入框，回复显示在人物上方；旁边的菜单可打开设置或退出
   - 极简快速输入窗，回复直接显示到桌宠气泡
   - 右键打开小型悬浮聊天窗口
   - 单独的对话设置窗口
@@ -180,7 +184,7 @@ API key 只保存在本机。应用会优先用系统安全存储加密；如果
 
 自动表情模式下，摸头或长按、轻点身体打招呼、拖动后放下会有不同的本地回应，使用角色已有表情。内置角色各有自己的短句，也会使用你设置的称呼。不调用模型、不朗读、不增加好感度；短句不会覆盖已有回复或提醒，也不会打断对话和语音。在 **通用 > 互动短句** 中可关闭短句，保留原来的动作反馈。
 
-点击换表情模式保持手动：一次点击只换一个表情，双击和长按不会额外改变，拖动后恢复原先选中的表情。本次不改动角色图片，也不是 Live2D。
+点击换表情模式保持手动：一次点击只换一个表情，双击和长按不会额外改变，拖动后恢复原先选中的表情。原有角色图片保持不变，导入模型的使用方式见 [Live2D 指南](docs/live2d.md#简体中文)。
 
 ## 角色包
 
@@ -237,3 +241,5 @@ assets/characters/
 ## 许可证
 
 Code is released under the MIT License. See [ASSET_NOTICE.md](ASSET_NOTICE.md) before publicly redistributing artwork assets.
+
+内置中日文备用字体采用 SIL Open Font License 1.1，详见[字体许可说明](assets/fonts/NOTICE.md)。

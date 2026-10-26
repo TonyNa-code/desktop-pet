@@ -5,10 +5,11 @@ const os = require("node:os");
 const path = require("node:path");
 const http = require("node:http");
 const { spawn } = require("node:child_process");
-const { restorePlacement } = require("../src/window-placement");
+const appRoot = process.env.PET_SMOKE_APP || path.join(__dirname, "..");
+const { restorePlacement } = require(path.join(appRoot, "src/window-placement"));
 
 const dataDir = process.env.PET_SMOKE_DATA || fs.mkdtempSync(path.join(os.tmpdir(), "desktop-pet-smoke-"));
-const screenshots = path.join(__dirname, "../out/smoke");
+const screenshots = path.join(__dirname, process.env.PET_SMOKE_APP ? "../out/smoke-packaged" : "../out/smoke");
 app.setPath("userData", dataDir);
 app.disableHardwareAcceleration();
 
@@ -66,6 +67,16 @@ const server = http.createServer((req, res) => {
 });
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function menuFromButton(pet) {
+  const original = Menu.prototype.popup;
+  let menu;
+  Menu.prototype.popup = function (options) { assert.equal(options.window, pet); menu = this; };
+  try {
+    await evaluate(pet, () => document.querySelector("#pet-menu").click());
+    await until(() => menu, "visible pet menu");
+    return menu;
+  } finally { Menu.prototype.popup = original; }
+}
 async function until(check, label, timeout = 15000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -89,19 +100,20 @@ async function findWindow(file) {
   return window;
 }
 async function screenshot(window, name) {
+  await evaluate(window, () => document.fonts.ready.then(() => true));
   fs.mkdirSync(screenshots, { recursive: true });
   fs.writeFileSync(path.join(screenshots, `${name}.png`), (await window.webContents.capturePage()).toPNG());
 }
 
 async function run() {
   if (process.env.PET_SMOKE_PHASE === "second-instance") {
-    require("../src/main.js");
+    require(path.join(appRoot, "src/main.js"));
     assert.equal(app.hasSingleInstanceLock(), false, "A second instance acquired the profile lock");
     // Quit may finish after ready on Linux; the parent verifies the natural exit.
     await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Second instance did not quit")), 5000));
   }
   if (process.env.PET_SMOKE_PHASE === "restart") {
-    require("../src/main.js");
+    require(path.join(appRoot, "src/main.js"));
     await app.whenReady();
     const pet = await findWindow("index.html");
     const placement = JSON.parse(fs.readFileSync(path.join(dataDir, "window-placement.json"), "utf8"));
@@ -144,15 +156,34 @@ async function run() {
         console.log("Electron restart PASS: position and saved settings restored; confirmed quit exits without saving discarded edits.");
       } catch (error) { console.error(error); app.exit(1); }
     });
-    app.quit();
+    (await menuFromButton(pet)).items.find(item => item.accelerator === "CommandOrControl+Q").click();
     await new Promise((resolve, reject) => setTimeout(() => reject(new Error("Confirmed quit did not exit")), 5000));
   }
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  require("../src/main.js");
+  require(path.join(appRoot, "src/main.js"));
   await app.whenReady();
   const pet = await findWindow("index.html");
   const settings = await findWindow("settings.html");
+  for (const window of [pet, settings]) {
+    const loaded = await evaluate(window, async () => {
+      const results = [];
+      for (const [family, text] of [["Desktop Pet CJK SC", "角色对话"], ["Desktop Pet CJK JP", "会話かなカナ"]]) {
+        const faces = await document.fonts.load(`16px "${family}"`, text);
+        results.push(faces.length > 0 && faces.every(face => face.status === "loaded"));
+      }
+      return results;
+    });
+    assert.deepEqual(loaded, [true, true], "Bundled CJK fonts must load under the page CSP");
+  }
   const endpoint = `http://127.0.0.1:${server.address().port}`;
+  const petMenu = await menuFromButton(pet);
+  assert.ok(petMenu.items.some(item => item.accelerator === "CommandOrControl+Q"));
+  assert.equal(await evaluate(pet, () => {
+    const button = document.querySelector("#pet-menu");
+    const rect = button.getBoundingClientRect();
+    return button.getAttribute("aria-haspopup") === "menu" && !!button.title && rect.right <= innerWidth
+      && button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  }), true);
   assert.ok(Menu.getApplicationMenu().items.some((item) => item.role?.toLowerCase() === "editmenu"));
   const savedClipboard = clipboard.availableFormats().map((format) => [format, clipboard.readBuffer(format)]);
   try {
@@ -275,7 +306,7 @@ async function run() {
   });
   await until(() => evaluate(chat, async () => (await window.desktopPet.getChatState()).config.memory.notes.length === 1), "memory ready for restart");
 
-  await evaluate(pet, () => document.querySelector("#talk").click());
+  await evaluate(pet, () => window.desktopPet.openQuickChatWindow());
   let quick = await findWindow("quick-chat.html");
   assert.equal(await evaluate(quick, () => document.querySelector("#character-name").textContent), "Test Character");
   const draftText = "An unsent thought\nA second line";
@@ -310,7 +341,7 @@ async function run() {
   const beforeQuick = quick.getBounds();
   pet.setPosition(originalPetBounds.x - 100, originalPetBounds.y - 40);
   await until(() => quick.getBounds().x !== beforeQuick.x, "companion input follows pet");
-  const expectedQuick = require("../src/companion-layout").companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea);
+  const expectedQuick = require(path.join(appRoot, "src/companion-layout")).companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea);
   assert.deepEqual(quick.getBounds(), expectedQuick);
   pet.setBounds(originalPetBounds);
   const recovery = Menu.getApplicationMenu().getMenuItemById("show-pet");
@@ -331,7 +362,7 @@ async function run() {
     return bounds.x >= area.x && bounds.y >= area.y && bounds.x + bounds.width <= area.x + area.width && bounds.y + bounds.height <= area.y + area.height;
   }, "recover pet after display change");
   await delay(400);
-  assert.deepEqual(quick.getBounds(), require("../src/companion-layout").companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea));
+  assert.deepEqual(quick.getBounds(), require(path.join(appRoot, "src/companion-layout")).companionBounds(pet.getBounds(), screen.getDisplayMatching(pet.getBounds()).workArea));
   assert.deepEqual((await evaluate(pet, () => window.desktopPet.getChatState())).history, profileBeforeRecovery.history);
   const recoveredChat = chat.getBounds();
   const recoveredArea = screen.getDisplayMatching(recoveredChat).workArea;
@@ -443,7 +474,8 @@ async function run() {
   await evaluate(pet, () => document.querySelector("#bubble-history").click());
   await until(() => chat.isVisible(), "bubble opens history");
   await evaluate(pet, () => document.querySelector("#bubble-reply").click());
-  await until(() => quick.isVisible(), "bubble opens quick reply");
+  await until(() => evaluate(pet, () => !document.querySelector("#companion-input").hidden), "bubble opens inline reply");
+  await evaluate(pet, () => document.querySelector("#companion-close").click());
   const beforeRecallRequests = requests.length;
   const beforeRecallHistory = (await evaluate(pet, () => window.desktopPet.getChatState())).history;
   await evaluate(pet, () => document.querySelector("#bubble-dismiss").click());
@@ -561,7 +593,7 @@ async function run() {
   assert.equal(await evaluate(pet, () => bubbleVisible), true);
   for (const window of [pet, chat, quick]) {
     assert.equal(await evaluate(window, () => document.querySelector("#voice-controls").hidden), false);
-    assert.equal(await evaluate(window, () => document.querySelector("#voice-toggle").textContent), "Replay");
+    assert.equal(await evaluate(window, () => document.querySelector("#voice-toggle").getAttribute("aria-label")), "Read the latest reply again with the current voice service");
   }
   const beforeReplay = requests.length;
   await evaluate(quick, () => { document.querySelector("#voice-toggle").click(); document.querySelector("#voice-toggle").click(); });
@@ -745,7 +777,7 @@ async function run() {
   let leavePrompts = 0;
   dialog.showMessageBox = async () => { leavePrompts++; return { response: 0 }; };
   await evaluate(settings, () => { document.querySelector("#persona-name").value = "Unsaved name"; });
-  app.quit();
+  (await menuFromButton(pet)).items.find(item => item.accelerator === "CommandOrControl+Q").click();
   await until(() => leavePrompts === 1, "confirm before quitting with unsaved settings");
   await delay(300);
   for (const window of [pet, settings, chat, quick]) assert.equal(window.isDestroyed(), false, "Cancelling quit keeps every window alive");

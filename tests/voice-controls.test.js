@@ -234,3 +234,31 @@ test("voice-only updates preserve message nodes and a reader's scroll position",
   assert.equal(messages.children[0], first);
   assert.equal(messages.scrollTop, 42);
 });
+
+test("pet voice controls keep icons and accessible labels through stop and replay", async () => {
+  let update, stops = 0, replays = 0;
+  const ui = loadRenderer("voice-controls.js", {
+    onChatStateUpdated: callback => { update = callback; },
+    stopVoice: async () => { stops++; }, replaySpeech: async () => { replays++; },
+  }, "index.html");
+  const controls = ui.nodes.get("#voice-controls");
+  const button = ui.nodes.get("#voice-toggle");
+  const icon = {};
+  const attributes = {};
+  controls.dataset.compact = "true";
+  button.querySelector = () => icon;
+  button.setAttribute = (key, value) => { attributes[key] = value; };
+  update({ resolvedLanguage: "en-US", voice: { enabled: true, status: "playing", canReplay: true } });
+  assert.equal(icon.src, "./icons/square.svg");
+  assert.equal(attributes["aria-label"], button.title);
+  assert.ok(button.title.includes("Stop"));
+  assert.equal(button.textContent, "");
+  await button.events.click();
+  assert.equal(stops, 1);
+  update({ voice: { enabled: true, status: "idle", canReplay: true } });
+  assert.equal(icon.src, "./icons/volume-2.svg");
+  await button.events.click();
+  assert.equal(replays, 1);
+  update({ voice: { enabled: false, status: "idle", canReplay: false } });
+  assert.equal(controls.hidden, true);
+});
