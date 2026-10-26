@@ -81,6 +81,7 @@ let speechActive = false;
 let speechWatchdog;
 let conversationActive = false;
 let conversationAction = "idle";
+let lastReplyGestureId = null;
 let queuedNotice = null;
 let bubbleVisible = false;
 let interactionReadyAt = 0;
@@ -729,6 +730,11 @@ function handlePetMessage(message = {}) {
   if (settings.expressionMode === "automatic" && !dragStart) {
     if (isChat) setState(conversationAction);
     else if (action && character.states[action]) playTemporary(action, Math.max(temporaryDuration(action), 1200));
+    if (isChat && character.type === "live2d" && !message.streaming && message.replyMotion
+      && Number.isSafeInteger(message.presentationId) && message.presentationId !== lastReplyGestureId) {
+      lastReplyGestureId = message.presentationId;
+      window.DesktopPetModel?.replyMotion(message.replyMotion);
+    }
   }
   if (message.notification) window.desktopPet.presentNotification?.(message.notification);
 }

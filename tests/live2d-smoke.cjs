@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const http = require("node:http");
+const { poll } = require("./poll.cjs");
 const project = path.join(__dirname, "..");
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "pet-live2d-smoke-"));
 const output = path.join(project, "out/playwright/live2d");
@@ -67,7 +68,7 @@ async function run() {
     await pet.waitForFunction(() => document.querySelector("#model-status").textContent.includes("not installed"));
     await app.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); }, corePath);
     await settings.locator("#import-core").click();
-    await pet.waitForFunction(() => document.querySelector("#model-status").hidden, { timeout: 30000 });
+    await pet.waitForFunction(() => document.querySelector("#model-status").hidden, null, { timeout: 30000 });
     const frame = pet.frames().find((item) => item.url().startsWith("pet-live2d:"));
     assert.ok(frame, "isolated model frame");
     assert.equal(await frame.evaluate(() => typeof window.desktopPet), "undefined");
@@ -135,6 +136,13 @@ async function run() {
     await settings.locator("#preview-motion").click();
     await pet.waitForFunction(() => modelEvents.some((item) => item.type === "motion"));
     await settings.locator("#live2d-happy").selectOption("1");
+    const replyMotion = await settings.locator("#live2d-motion-happy").evaluate(select => {
+      const options = [...select.options].filter(option => option.value);
+      return (options.find(option => !/^idle$/i.test(JSON.parse(option.value).group)) || options[0]).value;
+    });
+    await settings.locator("#live2d-motion-happy").selectOption(replyMotion);
+    await settings.locator("#live2d-motion-happy").scrollIntoViewIfNeeded();
+    await settings.screenshot({ path: path.join(output, "settings-reply-gestures.png") });
     await settings.locator("#save-settings").click();
     await pet.waitForFunction(() => settings.persona.live2dExpressions.happy === 1);
     await settings.evaluate((endpoint) => window.desktopPet.saveChatConfig({
@@ -161,7 +169,8 @@ async function run() {
     await pet.waitForFunction(() => speechActive && activeAudio && !activeAudio.paused);
     await pet.waitForFunction(() => modelEvents.filter((item) => item.type === "expression").at(-1)?.index === 1);
     await frame.waitForFunction(() => window.testParameters.mouth > 0.3);
-    await pet.waitForFunction(async () => (await window.desktopPet.getChatState()).voice.status === "playing");
+    await poll(() => pet.evaluate(async () => (await window.desktopPet.getChatState()).voice.status === "playing"), { label: "playing voice" });
+    await pet.waitForFunction(() => modelEvents.filter(item => item.type === "motion").length === 2);
     await pet.screenshot({ path: path.join(output, "model-speaking.png") });
     assert.equal(await pet.locator("#voice-toggle img").evaluate(img => img.complete && img.naturalWidth > 0 && img.src.endsWith("/square.svg")), true);
     await pet.locator("#voice-toggle").click();
@@ -178,12 +187,13 @@ async function run() {
     await pet.locator("#companion-text").fill("fail");
     await pet.locator("#companion-send").click();
     await pet.waitForFunction(() => document.querySelector("#companion-text").value === "fail");
+    assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "motion").length), 2, "failed requests never trigger reply gestures");
     assert.equal(await pet.locator("#companion-input").isHidden(), true, "failure does not steal focus");
     await pet.locator("#talk").click();
     await pet.locator("#companion-text").fill("cancel");
     await pet.locator("#companion-send").click();
     await pet.locator("#companion-stop").click();
-    await pet.waitForFunction(async () => !(await window.desktopPet.getChatState()).busy);
+    await poll(() => pet.evaluate(async () => !(await window.desktopPet.getChatState()).busy), { label: "cancelled request" });
     await pet.waitForTimeout(2200);
     assert.equal(await pet.evaluate(() => bubbleVisible), false, "cancelled reply cannot return later");
     await pet.locator("#talk").click();

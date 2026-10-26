@@ -737,6 +737,12 @@ function normalizePersonaSettings(rawPersona = {}) {
       const value = raw.live2dExpressions?.[key];
       return [key, Number.isInteger(value) && value >= 0 && value < 64 ? value : -1];
     })),
+    live2dMotions: Object.fromEntries(["happy", "shy", "review", "failed"].map((key) => {
+      const value = raw.live2dMotions?.[key];
+      const valid = value && typeof value.group === "string" && value.group.length <= 80
+        && !/[\u0000-\u001f\u007f]/.test(value.group) && Number.isInteger(value.index) && value.index >= 0 && value.index < 256;
+      return [key, valid ? { group: value.group, index: value.index } : null];
+    })),
   };
 }
 
@@ -1689,6 +1695,7 @@ async function sendChatMessage(_event, rawText, context) {
     sendPetMessage(result.reply, result.action, {
       ...presentation,
       speak: result.ok,
+      replyMotion: result.ok ? replyMotionFor(result.action) : null,
       bubbleText: bubblePreview(result.reply),
     });
     if (result.ok) recordChatTimeProgress();
@@ -1701,6 +1708,14 @@ async function sendChatMessage(_event, rawText, context) {
       broadcastChatState();
     }
   }
+}
+
+function replyMotionFor(action) {
+  const pack = getCharacterPack();
+  const motion = settings.persona?.live2dMotions?.[action];
+  if (settings.expressionMode !== "automatic" || pack?.type !== "live2d" || !motion
+    || !Object.hasOwn(pack.motions, motion.group) || motion.index >= pack.motions[motion.group]) return null;
+  return { group: motion.group, index: motion.index };
 }
 
 function broadcastChatState() {

@@ -39,3 +39,33 @@ test("partner touch phrases are opt-in, local and leave affection unchanged", ()
   assert.match(pet.run('speechBubble.textContent'), /Alex/);
   assert.equal(pet.run('speechBubble.textContent.includes("pet.interaction.")'), false);
 });
+
+test("reply gesture mappings are optional, normalized, and checked against the active model", () => {
+  const app = loadMain();
+  app.run(`settings = normalizeSettings({persona:{live2dMotions:{happy:{group:"Tap",index:1},shy:{group:"",index:0},review:{group:"Tap",index:-1},failed:{group:"Tap",index:256}}}});
+    getCharacterPack = () => ({type:"live2d",motions:{Tap:2,"":1}});`);
+  assert.equal(app.run('replyMotionFor("happy").index'), 1);
+  assert.equal(app.run('replyMotionFor("shy").group'), "");
+  assert.equal(app.run('replyMotionFor("review")'), null);
+  assert.equal(app.run('replyMotionFor("failed")'), null);
+  app.run('getCharacterPack = () => ({type:"live2d",motions:{Tap:1}})');
+  assert.equal(app.run('replyMotionFor("happy")'), null);
+  app.run('settings.expressionMode = "clickOnly"');
+  assert.equal(app.run('replyMotionFor("shy")'), null);
+  assert.equal(app.run('normalizeSettings({}).persona.live2dMotions.happy'), null);
+});
+
+test("completed replies trigger one gesture, never one per stream chunk or replay", () => {
+  const pet = loadPet();
+  pet.run(`globalThis.gestures=[]; window.DesktopPetModel={busy(){},stopMouth(){},expression(){},replyMotion(value){gestures.push(value)}};
+    character={...character,type:"live2d"}; settings.expressionMode="automatic";
+    globalThis.reply={source:"chat",action:"happy",text:"Hello",presentationId:1,replyMotion:{group:"Tap",index:0},speak:false};
+    handlePetMessage({...reply,streaming:true}); handlePetMessage({...reply,streaming:true});`);
+  assert.equal(pet.run('gestures.length'), 0);
+  pet.run('handlePetMessage(reply); handlePetMessage(reply)');
+  assert.equal(pet.run('gestures.length'), 1);
+  pet.run('handlePetMessage({...reply,presentationId:2,replyMotion:null})');
+  assert.equal(pet.run('gestures.length'), 1);
+  pet.run('settings.expressionMode="clickOnly"; handlePetMessage({...reply,presentationId:3})');
+  assert.equal(pet.run('gestures.length'), 1);
+});

@@ -490,6 +490,28 @@ function fillModelExpressions(select, names, value = -1) {
   select.value = String(value);
 }
 
+function fillModelMotions(select, motions, selected = null, optional = false) {
+  select.textContent = "";
+  if (optional) {
+    const option = document.createElement("option");
+    option.value = ""; option.textContent = text("live2d.noMotion"); select.append(option);
+  }
+  for (const [group, count] of Object.entries(motions || {})) {
+    for (let index = 0; index < count; index++) {
+      const option = document.createElement("option");
+      option.value = JSON.stringify({ group, index });
+      option.textContent = `${group || text("live2d.motion")} ${index + 1}`; select.append(option);
+    }
+  }
+  if (optional) select.value = selected && Object.hasOwn(motions || {}, selected.group) && selected.index < motions[selected.group]
+    ? JSON.stringify({ group: selected.group, index: selected.index }) : "";
+}
+
+function selectedReplyMotion(mood) {
+  try { return JSON.parse(document.querySelector(`#live2d-motion-${mood}`).value || "null"); }
+  catch { return null; }
+}
+
 function renderLive2D(character) {
   document.querySelector("#live2d-panel").hidden = character.type !== "live2d";
   if (character.type !== "live2d") return;
@@ -499,15 +521,10 @@ function renderLive2D(character) {
   for (const mood of ["happy", "shy", "review", "failed"]) {
     const index = config.persona?.live2dExpressions?.[mood] ?? -1;
     fillModelExpressions(document.querySelector(`#live2d-${mood}`), names, index < names.length ? index : -1);
+    fillModelMotions(document.querySelector(`#live2d-motion-${mood}`), character.motions, config.persona?.live2dMotions?.[mood], true);
   }
   const motionSelect = document.querySelector("#live2d-motion");
-  motionSelect.textContent = "";
-  for (const [group, count] of Object.entries(character.motions || {})) {
-    for (let index = 0; index < count; index++) {
-      const option = document.createElement("option");
-      option.value = JSON.stringify({ group, index }); option.textContent = `${group} ${index + 1}`; motionSelect.append(option);
-    }
-  }
+  fillModelMotions(motionSelect, character.motions);
   document.querySelector("#preview-motion").disabled = !motionSelect.options.length;
   refreshRuntimeStatus();
 }
@@ -692,6 +709,7 @@ function readConfigForm(includeEmptyKey = false) {
     live2dGaze: document.querySelector("#live2d-gaze").checked,
     live2dExpressions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) =>
       [mood, Number(document.querySelector(`#live2d-${mood}`).value || -1)])),
+    live2dMotions: Object.fromEntries(["happy", "shy", "review", "failed"].map((mood) => [mood, selectedReplyMotion(mood)])),
   };
   const affection = {
     enabled: affectionEnabledEl.checked,

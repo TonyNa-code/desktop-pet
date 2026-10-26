@@ -19,6 +19,8 @@
   let mouthAt = 0;
   let pettingUntil = 0;
   let nextMotionAt = 0;
+  let replyMotionActive = false;
+  let replyMotionAt = -Infinity;
   let metadata = { expressions: [], motions: {} };
 
   function notify(type, extra = {}) { parent.postMessage({ channel: CHANNEL, type, ...extra }, "*"); }
@@ -36,6 +38,7 @@
 
   function stopMotions() {
     if (!model) return;
+    replyMotionActive = false;
     model.internalModel.motionManager.stopAllMotions();
     // Breathing and blinking remain active; large idle motions are explicitly paced below.
     model.internalModel.motionManager.groups.idle = "__desktop_pet_no_automatic_motion__";
@@ -57,13 +60,15 @@
     }).catch(() => notify("action-error"));
   }
 
-  function motion(group, index = 0) {
-    if (!automatic || !model || !Object.hasOwn(metadata.motions, group)) return;
-    if (!Number.isInteger(index) || index < 0 || index >= metadata.motions[group]) return;
+  function motion(group, index = 0, reply = false) {
+    if (!automatic || !model || !Object.hasOwn(metadata.motions, group)) return false;
+    if (!Number.isInteger(index) || index < 0 || index >= metadata.motions[group]) return false;
+    replyMotionActive = reply;
     const target = model;
     target.motion(group, index, 3).then((started) => { if (target === model) notify(started ? "motion" : "action-error", { group, index }); })
       .catch(() => notify("action-error"));
     nextMotionAt = performance.now() + 45000;
+    return true;
   }
 
   async function load(data) {
@@ -77,6 +82,7 @@
     artBounds = null;
     expressionIndex = -1;
     mouthTarget = mouthValue = 0;
+    replyMotionAt = -Infinity;
     model?.destroy({ children: true, texture: true, baseTexture: true });
     model = null;
     try {
@@ -105,7 +111,8 @@
       artBounds = window.DesktopPetRig.measure(application, model);
       fit();
       nextMotionAt = performance.now() + 35000;
-      const lips = descriptor.Groups?.find((group) => group.Name === "LipSync")?.Ids || ["ParamMouthOpenY"];
+      const lips = (descriptor.Groups?.find((group) => group.Name === "LipSync")?.Ids || []).filter(id => ids.has(id));
+      if (!lips.length && ids.has(resolve("ParamMouthOpenY"))) lips.push(resolve("ParamMouthOpenY"));
       internal.on("beforeModelUpdate", () => {
         const now = performance.now();
         if (now - mouthAt > 300) mouthTarget = 0;
@@ -150,7 +157,7 @@
     } else if (data.type === "presence" && ["idle", "attentive", "thinking", "speaking"].includes(data.state)) {
       if (presence === data.state) return;
       presence = data.state;
-      if (presence !== "idle") stopMotions();
+      if (presence !== "idle" && !(presence === "speaking" && replyMotionActive)) stopMotions();
       nextMotionAt = performance.now() + 45000;
       if (automatic && gazeEnabled) model.internalModel.focusController.focus(0, presence === "idle" ? 0 : 0.08);
     } else if (data.type === "gaze") {
@@ -164,6 +171,9 @@
       expression(data.index);
     } else if (data.type === "motion") {
       motion(data.group, data.index);
+    } else if (data.type === "reply-motion") {
+      const now = performance.now();
+      if (now - replyMotionAt >= 12000 && motion(data.group, data.index, true)) replyMotionAt = now;
     } else if (data.type === "touch" && automatic && !busy) {
       pettingUntil = performance.now() + 1200;
       const group = Object.keys(metadata.motions).find((key) => /^(tapbody|tap_body|touch|tap)$/i.test(key));

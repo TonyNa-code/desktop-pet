@@ -111,6 +111,7 @@
     cycle: () => { if (loaded) send("cycle"); },
     expression: (index) => { desiredExpression = index; if (loaded) send("expression", { index }); },
     touch: () => { if (loaded) send("touch"); },
+    replyMotion: (motion) => { if (loaded) send("reply-motion", { group: motion.group, index: motion.index }); },
     presence: (state) => { presence = state; if (loaded) send("presence", { state }); },
     gaze: (x, y) => send("gaze", { x, y }),
     busy: (busy) => { if (current) { current.busy = busy; send("options", current); } },

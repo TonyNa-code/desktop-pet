@@ -1,6 +1,7 @@
 ((root) => {
   const aliases = { ParamAngleX: "PARAM_ANGLE_X", ParamAngleY: "PARAM_ANGLE_Y", ParamAngleZ: "PARAM_ANGLE_Z",
-    ParamEyeBallX: "PARAM_EYE_BALL_X", ParamEyeBallY: "PARAM_EYE_BALL_Y", ParamBodyAngleX: "PARAM_BODY_ANGLE_X", ParamBreath: "PARAM_BREATH" };
+    ParamEyeBallX: "PARAM_EYE_BALL_X", ParamEyeBallY: "PARAM_EYE_BALL_Y", ParamBodyAngleX: "PARAM_BODY_ANGLE_X", ParamBreath: "PARAM_BREATH",
+    ParamMouthOpenY: "PARAM_MOUTH_OPEN_Y" };
   function configure(internal) {
     const ids = new Set(internal.coreModel.getModel().parameters.ids);
     const resolve = (name) => ids.has(name) ? name : ids.has(aliases[name]) ? aliases[name] : name;
