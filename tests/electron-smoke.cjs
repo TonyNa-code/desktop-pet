@@ -60,9 +60,14 @@ const server = http.createServer((req, res) => {
       return;
     }
     if (last === "Delayed message") { delayedResponse = res; return; }
+    if (last === "Interrupted reply") {
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.end('data: {"choices":[{"delta":{"content":"[expression:happy] Partial sentence"}}]}\n\n');
+      return;
+    }
     if (last === "Failure message") { res.writeHead(401); res.end("Invalid test credential"); return; }
     if (last === "Retry once" && ++retryAttempts === 1) { res.writeHead(503); res.end("Try again"); return; }
-    if (last === "Retry beside pet" && ++inlineAttempts === 1) { res.writeHead(503); res.end("Try again"); return; }
+    if (last === "Retry beside pet" && ++inlineAttempts === 1) { res.writeHead(503, { "retry-after": "15" }); res.end("Try again"); return; }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ choices: [{ message: { content: "Test reply received." } }] }));
   });
@@ -305,8 +310,27 @@ async function run() {
   await send("Second message");
   assert.ok(requests.at(-1).messages.some((message) => message.role === "assistant" && message.content === "Test reply received."));
   await send("Failure message");
+  await until(() => evaluate(pet, () => !document.querySelector("#bubble-chat-settings").hidden
+    && document.querySelector("#speech-bubble").textContent.includes("HTTP 401")), "authentication hint on the pet");
+  assert.equal(await evaluate(pet, () => {
+    const button = document.querySelector("#bubble-chat-settings");
+    const bounds = button.getBoundingClientRect();
+    return document.querySelector("#bubble-speaker").textContent === "Chat service"
+      && bounds.width === 24 && button.contains(document.elementFromPoint(bounds.x + 12, bounds.y + 12));
+  }), true);
+  await evaluate(settings, () => document.querySelector("#tab-character").click());
+  const beforeSetup = requests.length;
+  await evaluate(pet, () => document.querySelector("#bubble-chat-settings").click());
+  await until(() => evaluate(settings, () => document.querySelector("#tab-chat").getAttribute("aria-selected") === "true"), "auth error opens chat settings");
+  assert.equal(requests.length, beforeSetup);
+  await send("Interrupted reply");
+  await until(() => evaluate(pet, () => document.querySelector("#speech-bubble").textContent.includes("Partial reply:\nPartial sentence")
+    && document.querySelector("#bubble-chat-settings").hidden), "partial reply remains readable");
+  const partial = (await evaluate(chat, () => window.desktopPet.getChatState())).history.at(-1);
+  assert.ok(partial.failed && partial.content.endsWith("Partial sentence"));
   await send("Recovery message");
   assert.equal(requests.at(-1).messages.some((message) => message.content === "Failure message"), false);
+  assert.equal(requests.at(-1).messages.some((message) => message.content.includes("Partial sentence")), false);
   await send("Retry once");
   await evaluate(chat, () => document.querySelector("#retry-message").click());
   await until(() => retryAttempts === 2 && evaluate(chat, () => !document.querySelector("#send-message").disabled), "retry sends and completes");
@@ -321,6 +345,11 @@ async function run() {
     document.querySelector("#companion-send").click();
   });
   await until(() => evaluate(pet, () => !document.querySelector("#companion-retry").hidden && document.querySelector("#companion-text").value === "Retry beside pet"), "inline recovery available");
+  assert.equal(await evaluate(pet, () => {
+    const hint = document.querySelector("#speech-bubble").textContent;
+    return hint.includes("HTTP 503") && hint.includes("15 s") && !hint.includes("API key")
+      && document.querySelector("#bubble-chat-settings").hidden;
+  }), true);
   await evaluate(pet, () => document.querySelector("#talk").click());
   await evaluate(pet, () => {
     const input = document.querySelector("#companion-text");
@@ -528,6 +557,7 @@ async function run() {
           && panel.left >= 0 && panel.right <= innerWidth
           && [...document.querySelectorAll(".bubble-toolbar button")].every((button) => {
             const bounds = button.getBoundingClientRect();
+            if (button.id === "bubble-chat-settings") return button.hidden && bounds.width === 0;
             return bounds.width === 24 && bounds.right <= panel.right && button.title && button.getAttribute("aria-label") === button.title;
           })
           && [...document.querySelectorAll(".icon-button img")].every((img) => img.complete && img.naturalWidth > 0)

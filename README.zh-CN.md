@@ -10,7 +10,7 @@
   <p>
     <a href="https://github.com/TonyNa-code/desktop-pet/releases/latest"><strong>下载最新版</strong></a> ·
     <a href="#get-started">开始使用</a> ·
-    <a href="docs/releases/v0.5.2.md">更新内容</a>
+    <a href="docs/releases/v0.5.3.md">更新内容</a>
   </p>
   <p>
     <a href="https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml"><img src="https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg" alt="Build status"></a>

@@ -6,6 +6,8 @@
 
 ## Chat, Persona, And Voice
 
+A **Chat service** notice explains why a request failed. For a rejected key or model, open Chat settings from the notice. If the service is busy or limiting requests, check its suggested wait before retrying. An interrupted stream keeps the text already received in the bubble and history, marked as incomplete; that turn is not read aloud or sent as context.
+
 Click the speech icon beside your character to write a message. If the service URL or model name is missing, the settings button there opens the Chat tab and keeps your draft. Saving the settings does not send it. After a failed or stopped reply, **Retry** beside the pet resends the last message without replacing a different draft.
 
 Change language from `right-click menu > Language` or `Chat Settings > General > Interface Language`. It affects menus, windows, bubbles, and the default chat language.

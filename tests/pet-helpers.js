@@ -13,7 +13,7 @@ function loadPet(api = {}) {
   const events = {};
   let timerId = 0;
   const nodes = new Map();
-  for (const id of ["speech-bubble", "speech-card", "bubble-speaker", "bubble-reply", "bubble-history", "bubble-pin", "bubble-dismiss", "last-reply", "talk", "pet-menu"]) {
+  for (const id of ["speech-bubble", "speech-card", "bubble-speaker", "bubble-reply", "bubble-chat-settings", "bubble-history", "bubble-pin", "bubble-dismiss", "last-reply", "talk", "pet-menu"]) {
     nodes.set(`#${id}`, { textContent: "", events: {}, attributes: {},
       addEventListener(name, fn) { this.events[name] = fn; },
       setAttribute(name, value) { this.attributes[name] = value; },

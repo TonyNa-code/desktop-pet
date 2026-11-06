@@ -3,6 +3,7 @@ const speechBubble = document.querySelector("#speech-bubble");
 const speechCard = document.querySelector("#speech-card");
 const bubbleSpeaker = document.querySelector("#bubble-speaker");
 const bubbleReply = document.querySelector("#bubble-reply");
+const bubbleSettings = document.querySelector("#bubble-chat-settings");
 const bubbleHistory = document.querySelector("#bubble-history");
 const bubblePin = document.querySelector("#bubble-pin");
 const bubbleDismiss = document.querySelector("#bubble-dismiss");
@@ -493,14 +494,15 @@ let bubbleHovered = false;
 let bubbleFocused = false;
 let presentationId = null;
 let dismissedPresentationId = null;
+let serviceNotice = false;
 
 function updateBubbleControls() {
-  const name = settings.characterName || character.name;
+  const name = serviceNotice ? text("chatError.source") : settings.characterName || character.name;
   bubbleSpeaker.textContent = name;
   bubbleSpeaker.title = name;
   for (const [button, key] of [[bubbleReply, "pet.reply"], [bubbleHistory, "pet.openChat"],
     [bubblePin, bubblePinned ? "pet.unpinReply" : "pet.pinReply"], [bubbleDismiss, "pet.dismissReply"],
-    [lastReplyButton, "pet.lastReply"], [petMenuButton, "pet.menu"]]) {
+    [bubbleSettings, "quick.connectService"], [lastReplyButton, "pet.lastReply"], [petMenuButton, "pet.menu"]]) {
     button.title = text(key);
     button.setAttribute("aria-label", button.title);
   }
@@ -517,6 +519,8 @@ function dismissBubble() {
   bubbleHovered = false;
   bubbleFocused = false;
   bubblePaused = false;
+  serviceNotice = false;
+  bubbleSettings.hidden = true;
   updateBubbleControls();
   conversationActive = false;
   conversationAction = "idle";
@@ -547,8 +551,13 @@ function hideBubbleLater(duration) {
   if (bubbleVisible && !bubblePaused && !bubblePinned && !bubbleStreaming && !speechActive) bubbleTimer = window.setTimeout(dismissBubble, duration);
 }
 
-function showBubble(text, duration = Math.min(22000, Math.max(4500, String(text || "").length * 110))) {
+function showBubble(text, duration = Math.min(22000, Math.max(4500, String(text || "").length * 110)), options = {}) {
   if (!speechBubble || !text) return;
+  if (serviceNotice !== (options.serviceNotice === true)) {
+    serviceNotice = options.serviceNotice === true;
+    updateBubbleControls();
+  }
+  bubbleSettings.hidden = !serviceNotice || options.settingsSuggested !== true;
   window.clearTimeout(bubbleTimer);
   const continuing = speechBubble.textContent && String(text).startsWith(speechBubble.textContent);
   const follow = continuing && speechBubble.scrollHeight - speechBubble.scrollTop - speechBubble.clientHeight < 24;
@@ -604,6 +613,7 @@ bubblePin.addEventListener("click", () => {
 });
 bubbleReply.addEventListener("click", () => window.DesktopPetCompanionInput?.open());
 bubbleHistory.addEventListener("click", () => window.desktopPet.openChatWindow());
+bubbleSettings.addEventListener("click", () => window.desktopPet.openCompanionSettings("chat"));
 lastReplyButton.addEventListener("click", () => window.desktopPet.showLastReply());
 talkButton.addEventListener("click", () => window.DesktopPetCompanionInput?.toggle());
 petMenuButton.addEventListener("click", () => window.desktopPet.showContextMenu());
@@ -743,7 +753,7 @@ function handlePetMessage(message = {}) {
     temporaryToken += 1;
   }
   stopSpeech();
-  showBubble(bubbleText, message.duration);
+  showBubble(bubbleText, message.duration, isChat ? message : undefined);
   if (typeof message !== "object" || message.speak !== false) {
     speakText(text);
   }

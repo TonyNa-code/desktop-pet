@@ -835,7 +835,7 @@ async function fetchModels() {
     modelOptionsEl.replaceChildren();
     modelOptionsEl.hidden = true;
     if (!result.ok || !result.models?.length) {
-      modelListStatusEl.textContent = text("settings.llm.modelsUnavailable");
+      modelListStatusEl.textContent = result.message || text("settings.llm.modelsUnavailable");
       return;
     }
     for (const id of ["", ...result.models]) {

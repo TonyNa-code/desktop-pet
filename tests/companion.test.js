@@ -67,7 +67,11 @@ test("invalid model lists fail without exposing provider bodies", async () => {
   await assert.rejects(readModelList(Response.json({ error: "invalid" })));
   await assert.rejects(readModelList(new Response("x".repeat(4 * 1024 * 1024 + 1))));
   const app = loadMain({ fetch: async () => new Response("private upstream error", { status: 401 }) });
-  assert.equal(JSON.stringify(await app.run('listAssistantModels(null,{assistant:{baseUrl:"https://chat.example"}})')), '{"ok":false,"status":401}');
+  const failure = await app.run('listAssistantModels(null,{assistant:{baseUrl:"https://chat.example"}})');
+  assert.equal(failure.ok, false);
+  assert.equal(failure.status, 401);
+  assert.match(failure.message, /API key/);
+  assert.doesNotMatch(failure.message, /private upstream error/);
 });
 
 test("changing service discards a late model list and keeps manual model input", async () => {

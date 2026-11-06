@@ -19,6 +19,7 @@ const path = require("node:path");
 const i18n = require("./i18n");
 const validation = require("./config-validation");
 const { readChatResponse } = require("./chat-response");
+const { chatHttpIssue, chatReadIssue } = require("./chat-diagnostics");
 const { AUDIO_LIMIT, ERROR_LIMIT, readResponseBytes, readResponseJson, returnedAudioUrl, audioDataUrl: validateAudioDataUrl, redactServiceText } = require("./network-safety");
 const { expressionInstruction, parseCompanionReply } = require("./companion-response");
 const { companionBounds } = require("./companion-layout");
@@ -1516,11 +1517,13 @@ async function requestAssistantReply(userText, controller = new AbortController(
   if (!assistant.baseUrl || !assistant.model) {
     return {
       reply: t("assistant.noConfig"),
+      settingsSuggested: true,
       action: "review",
       ok: false,
     };
   }
 
+  let receivedText = false;
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const headers = { "Content-Type": "application/json" };
@@ -1541,12 +1544,9 @@ async function requestAssistantReply(userText, controller = new AbortController(
     });
 
     if (!response.ok) {
-      const detail = await responseErrorText(response, [assistant.apiKey]);
+      const issue = await chatHttpIssue(response, t);
       return {
-        reply: t("assistant.statusError", {
-          status: response.status,
-          detail: detail ? `: ${detail}` : "",
-        }),
+        reply: issue.message, settingsSuggested: issue.settingsSuggested,
         action: pickAvailableAction(["failed", "review"]),
         ok: false,
       };
@@ -1555,7 +1555,10 @@ async function requestAssistantReply(userText, controller = new AbortController(
     const states = getCharacterPack()?.states || { idle: {} };
     const rawReply = await readChatResponse(response, (raw) => {
       const parsed = parseCompanionReply(raw, states, true);
-      if (parsed.text) onProgress?.(parsed.text, parsed.action);
+      if (parsed.text) {
+        receivedText = true;
+        onProgress?.(parsed.text, parsed.action);
+      }
     });
     const parsed = parseCompanionReply(rawReply, states);
     const reply = parsed.text;
@@ -1574,9 +1577,9 @@ async function requestAssistantReply(userText, controller = new AbortController(
       ok: true,
     };
   } catch (error) {
-    const timeoutMessage = error?.name === "AbortError" ? t("assistant.timeout") : t("assistant.unreachable");
+    const issue = chatReadIssue(error, controller.signal.aborted, t, receivedText);
     return {
-      reply: t("assistant.checkService", { message: timeoutMessage }),
+      reply: issue.message, settingsSuggested: issue.settingsSuggested,
       action: pickAvailableAction(["failed", "review"]),
       ok: false,
     };
@@ -1613,23 +1616,15 @@ async function testAssistantConnection(_event, patch = {}) {
       }),
     });
     if (!response.ok) {
-      const detail = await responseErrorText(response, [assistant.apiKey]);
-      return {
-        ok: false,
-        message: t("assistant.test.statusError", {
-          status: response.status,
-          detail: detail ? `: ${detail}` : "",
-        }, candidate),
-      };
+      const issue = await chatHttpIssue(response, (key, vars) => t(key, vars, candidate));
+      return { ok: false, message: issue.message };
     }
     const preview = (await readChatResponse(response)).slice(0, 80);
     if (!preview) return { ok: false, message: t("assistant.test.empty", {}, candidate) };
     return { ok: true, message: t("assistant.test.success", { preview }, candidate) };
   } catch (error) {
-    const message = error?.name === "AbortError"
-      ? t("assistant.test.timeout", {}, candidate)
-      : t("assistant.test.failed", {}, candidate);
-    return { ok: false, message };
+    const issue = chatReadIssue(error, controller.signal.aborted, (key) => t(key, {}, candidate));
+    return { ok: false, message: issue.message };
   } finally {
     clearTimeout(timeout);
   }
@@ -1645,7 +1640,10 @@ async function listAssistantModels(_event, patch = {}) {
     const headers = {};
     if (assistant.apiKey) headers.Authorization = `Bearer ${assistant.apiKey}`;
     const response = await fetch(modelsEndpoint(assistant.baseUrl), { headers, signal: controller.signal, redirect: "error" });
-    if (!response.ok) return { ok: false, status: response.status };
+    if (!response.ok) {
+      const issue = await chatHttpIssue(response, (key, vars) => t(key, vars, candidate), true);
+      return { ok: false, status: response.status, message: issue.message };
+    }
     return { ok: true, models: await readModelList(response) };
   } catch { return { ok: false, error: "unavailable" }; }
   finally { clearTimeout(timeout); }
@@ -1717,12 +1715,16 @@ async function sendChatMessage(_event, rawText, context) {
       return { ok: false, cancelled: true, revision: request.revision };
     }
     addChatMessage("user", text, !result.ok);
-    const assistantMessage = addChatMessage("assistant", result.reply, !result.ok);
-    sendPetMessage(result.reply, result.action, {
+    const reply = !result.ok && request.reply
+      ? t("chatError.partial", { reason: result.reply, partial: request.reply }) : result.reply;
+    const assistantMessage = addChatMessage("assistant", reply, !result.ok);
+    sendPetMessage(reply, result.action, {
       ...presentation,
       speak: result.ok,
       replyMotion: result.ok ? replyMotionFor(result.action) : null,
-      bubbleText: bubblePreview(result.reply),
+      serviceNotice: !result.ok,
+      settingsSuggested: !result.ok && result.settingsSuggested === true,
+      bubbleText: bubblePreview(reply),
     });
     if (result.ok) recordChatTimeProgress();
     updateMoodFromInteraction("chat");
