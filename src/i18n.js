@@ -225,6 +225,9 @@
       "quick.waiting": "等待回复...",
       "quick.replied": "在听",
       "quick.replyFailed": "回复失败，检查设置。",
+      "quick.notConnected": "尚未连接对话服务",
+      "quick.connectService": "配置对话服务",
+      "pet.retryMessage": "重发上一句话",
       "quick.sendFailed": "发送失败。",
 
       "settings.title": "对话设置",
@@ -610,6 +613,9 @@
       "quick.waiting": "Waiting...",
       "quick.replied": "Listening",
       "quick.replyFailed": "Reply failed. Check settings.",
+      "quick.notConnected": "No chat service connected",
+      "quick.connectService": "Set up chat service",
+      "pet.retryMessage": "Resend last message",
       "quick.sendFailed": "Sending failed.",
 
       "settings.title": "Companion Settings",
@@ -995,6 +1001,9 @@
       "quick.waiting": "返信待ち...",
       "quick.replied": "聞いているよ",
       "quick.replyFailed": "返信に失敗しました。設定を確認してください。",
+      "quick.notConnected": "会話サービスは未設定です",
+      "quick.connectService": "会話サービスを設定",
+      "pet.retryMessage": "直前のメッセージを再送",
       "quick.sendFailed": "送信に失敗しました。",
 
       "settings.title": "会話設定",

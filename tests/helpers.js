@@ -89,7 +89,7 @@ function loadRenderer(file, api = {}, htmlFile = file.replace(/\.js$/, ".html"))
       DesktopPetLlmPresets: require("../src/llm-presets"),
       addEventListener() {}, dispatchEvent() {}, close() {},
       desktopPet: { getChatState: () => new Promise(() => {}), onChatStateUpdated() {},
-        setChatDraft() {}, onChatDraftUpdated() {}, onAppQuitRequested() {}, confirmAppQuit() {}, ...api },
+        setChatDraft() {}, onChatDraftUpdated() {}, onAppQuitRequested() {}, onOpenChatSettingsTab() {}, confirmAppQuit() {}, ...api },
     },
   });
   if (["chat.js", "quick-chat.js", "companion-input.js"].includes(file)) {

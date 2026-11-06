@@ -1009,11 +1009,18 @@ function createQuickChatWindow() {
   });
 }
 
-function createCompanionSettingsWindow() {
+function createCompanionSettingsWindow(tab) {
+  const openRequestedTab = (win, opening = false) => {
+    if (tab !== "chat") return;
+    const showTab = () => { if (!win.isDestroyed()) win.webContents.send("open-chat-settings-tab"); };
+    if (opening || win.webContents.isLoading()) win.webContents.once("did-finish-load", showTab);
+    else showTab();
+  };
   if (companionSettingsWindow && !companionSettingsWindow.isDestroyed()) {
     keepAuxiliaryWindowsVisible();
     companionSettingsWindow.show();
     companionSettingsWindow.focus();
+    openRequestedTab(companionSettingsWindow);
     return;
   }
 
@@ -1034,6 +1041,7 @@ function createCompanionSettingsWindow() {
   });
 
   protectWindow(companionSettingsWindow, "settings.html");
+  openRequestedTab(companionSettingsWindow, true);
   companionSettingsWindow.loadFile(path.join(__dirname, "settings.html"));
   enableInputMenu(companionSettingsWindow);
   companionSettingsWindow.once("ready-to-show", () => companionSettingsWindow.show());
@@ -1676,6 +1684,15 @@ async function sendChatMessage(_event, rawText, context) {
   }
   if (chatRequest) return { ok: false, error: "chat_busy", ...chatState() };
 
+  if (context && Object.hasOwn(context, "retryOf")) {
+    const reply = chatHistory.at(-1);
+    const previous = chatHistory.at(-2);
+    if (!reply?.failed || reply.role !== "assistant" || reply.createdAt !== context.retryOf
+      || !previous?.failed || previous.role !== "user" || previous.content !== text) {
+      return { ok: false, cancelled: true, error: "stale_retry", ...chatState() };
+    }
+  }
+
   stopVoice();
   const request = { text, createdAt: Date.now(), revision: chatRevision, controller: new AbortController(), presentationId: ++presentationSequence };
   chatRequest = request;
@@ -2304,7 +2321,7 @@ if (ownsInstance) app.whenReady().then(() => {
   });
   on("open-chat-window", createChatWindow);
   on("open-quick-chat-window", createQuickChatWindow);
-  on("open-companion-settings", createCompanionSettingsWindow);
+  on("open-companion-settings", (_event, tab) => createCompanionSettingsWindow(tab));
   on("show-context-menu", showContextMenu);
   on("drag-start", beginDrag);
   handle("drag-move", moveDrag);

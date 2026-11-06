@@ -51,7 +51,12 @@ contextBridge.exposeInMainWorld("desktopPet", {
   synthesizeSpeech: (request) => ipcRenderer.invoke("synthesize-speech", request),
   openChatWindow: () => ipcRenderer.send("open-chat-window"),
   openQuickChatWindow: () => ipcRenderer.send("open-quick-chat-window"),
-  openCompanionSettings: () => ipcRenderer.send("open-companion-settings"),
+  openCompanionSettings: (tab) => ipcRenderer.send("open-companion-settings", tab),
+  onOpenChatSettingsTab: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("open-chat-settings-tab", listener);
+    return () => ipcRenderer.off("open-chat-settings-tab", listener);
+  },
   onChatStateUpdated: (callback) => {
     const listener = (_event, chatState) => callback(chatState);
     ipcRenderer.on("chat-state-updated", listener);

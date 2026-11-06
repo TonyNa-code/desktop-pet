@@ -972,6 +972,10 @@ for (const tab of document.querySelectorAll("[data-tab]")) {
   });
 }
 selectTab(selectedTab);
+window.desktopPet.onOpenChatSettingsTab(() => {
+  selectTab("chat");
+  document.querySelector("#tab-chat").focus();
+});
 window.desktopPet.onAppQuitRequested(async () => {
   try {
     const confirmed = await mayLeave();

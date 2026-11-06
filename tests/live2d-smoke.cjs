@@ -311,6 +311,11 @@ async function run() {
     await pet.waitForFunction(() => document.querySelector("#companion-text").value === "fail");
     assert.equal(await pet.evaluate(() => modelEvents.filter(item => item.type === "motion").length), 2, "failed requests never trigger reply gestures");
     assert.equal(await pet.locator("#companion-input").isHidden(), true, "failure does not steal focus");
+    await pet.locator("#companion-retry").waitFor({ state: "visible" });
+    const beforeRetry = requests;
+    await pet.locator("#companion-retry").click();
+    await poll(() => pet.evaluate(async () => !(await window.desktopPet.getChatState()).busy)
+      .then(idle => idle && requests === beforeRetry + 1), { label: "single explicit retry beside Live2D" });
     await pet.locator("#talk").click();
     await pet.locator("#companion-text").fill("cancel");
     await pet.locator("#companion-send").click();

@@ -26,6 +26,7 @@ let ttsRequest;
 const voiceRequests = [];
 let slowVoiceClosed = false;
 let retryAttempts = 0;
+let inlineAttempts = 0;
 const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => { body += chunk; });
@@ -61,6 +62,7 @@ const server = http.createServer((req, res) => {
     if (last === "Delayed message") { delayedResponse = res; return; }
     if (last === "Failure message") { res.writeHead(401); res.end("Invalid test credential"); return; }
     if (last === "Retry once" && ++retryAttempts === 1) { res.writeHead(503); res.end("Try again"); return; }
+    if (last === "Retry beside pet" && ++inlineAttempts === 1) { res.writeHead(503); res.end("Try again"); return; }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ choices: [{ message: { content: "Test reply received." } }] }));
   });
@@ -142,8 +144,9 @@ async function run() {
     await evaluate(pet, () => window.desktopPet.setSettings({ characterId: "default" }));
     await delay(1100);
     assert.equal(BrowserWindow.getAllWindows().length, 1);
-    await evaluate(pet, () => window.desktopPet.openCompanionSettings());
+    await evaluate(pet, () => window.desktopPet.openCompanionSettings("chat"));
     const settings = await findWindow("settings.html");
+    await until(() => evaluate(settings, () => document.querySelector("#tab-chat").getAttribute("aria-selected") === "true"), "requested chat tab in a new window");
     await until(() => evaluate(settings, () => document.querySelector("#persona-name").value === "Test Character"), "restored settings form");
     await evaluate(settings, () => { document.querySelector("#persona-name").value = "Discard this name"; });
     let prompts = 0;
@@ -176,6 +179,27 @@ async function run() {
     assert.deepEqual(loaded, [true, true], "Bundled CJK fonts must load under the page CSP");
   }
   const endpoint = `http://127.0.0.1:${server.address().port}`;
+  await evaluate(settings, () => { document.querySelector("#persona-name").value = "Unsaved persona"; });
+  await evaluate(pet, () => document.querySelector("#talk").click());
+  await until(() => evaluate(pet, () => !document.querySelector("#companion-text").disabled), "inline draft ready");
+  await evaluate(pet, () => {
+    const input = document.querySelector("#companion-text");
+    input.value = "Draft before setup";
+    input.dispatchEvent(new Event("input"));
+    document.querySelector("#companion-send").click();
+  });
+  await until(() => evaluate(settings, () => document.querySelector("#tab-chat").getAttribute("aria-selected") === "true"), "inline setup opens chat tab");
+  assert.equal(await evaluate(settings, () => document.querySelector("#persona-name").value), "Unsaved persona");
+  assert.equal(await evaluate(pet, () => {
+    const hint = document.querySelector("#companion-feedback");
+    const field = document.querySelector("#companion-text");
+    return !hint.hidden && !document.querySelector("#companion-input").hidden
+      && field.value === "Draft before setup" && field.getBoundingClientRect().bottom <= hint.getBoundingClientRect().top;
+  }), true);
+  assert.equal(requests.length, 0);
+  assert.equal((await evaluate(pet, () => window.desktopPet.getChatState())).history.length, 0);
+  await screenshot(pet, "inline-chat-setup");
+  await evaluate(pet, () => document.querySelector("#companion-close").click());
   const petMenu = await menuFromButton(pet);
   assert.ok(petMenu.items.some(item => item.accelerator === "CommandOrControl+Q"));
   const language = (await evaluate(pet, () => window.desktopPet.getAppState())).resolvedLanguage;
@@ -257,6 +281,14 @@ async function run() {
   await evaluate(settings, () => document.querySelector("#save-settings").click());
   await until(() => fs.existsSync(path.join(dataDir, "settings.json"))
     && JSON.parse(fs.readFileSync(path.join(dataDir, "settings.json"))).persona.name === "Test Character", "saved settings");
+  await until(() => evaluate(pet, () => document.querySelector("#companion-send").dataset.setup === "false"), "ready after chat setup");
+  assert.equal(await evaluate(pet, () => document.querySelector("#companion-text").value), "Draft before setup");
+  assert.equal((await evaluate(pet, () => window.desktopPet.getChatState())).history.length, 0);
+  await evaluate(pet, () => {
+    const input = document.querySelector("#companion-text");
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+  });
   await screenshot(settings, "settings");
   await evaluate(pet, () => window.desktopPet.openChatWindow());
   let chat = await findWindow("chat.html");
@@ -279,6 +311,43 @@ async function run() {
   await evaluate(chat, () => document.querySelector("#retry-message").click());
   await until(() => retryAttempts === 2 && evaluate(chat, () => !document.querySelector("#send-message").disabled), "retry sends and completes");
   assert.equal((await evaluate(chat, () => window.desktopPet.getChatState())).history.at(-1).failed, false);
+  await evaluate(pet, () => window.desktopPet.setSettings({ scale: 0.75 }));
+  await until(() => pet.getBounds().height === 316, "minimum pet size");
+  await evaluate(pet, () => document.querySelector("#talk").click());
+  await evaluate(pet, () => {
+    const input = document.querySelector("#companion-text");
+    input.value = "Retry beside pet";
+    input.dispatchEvent(new Event("input"));
+    document.querySelector("#companion-send").click();
+  });
+  await until(() => evaluate(pet, () => !document.querySelector("#companion-retry").hidden && document.querySelector("#companion-text").value === "Retry beside pet"), "inline recovery available");
+  await evaluate(pet, () => document.querySelector("#talk").click());
+  await evaluate(pet, () => {
+    const input = document.querySelector("#companion-text");
+    input.value = "Another unsent thought";
+    input.dispatchEvent(new Event("input"));
+  });
+  await until(() => evaluate(chat, () => document.querySelector("#message-input").value === "Another unsent thought"), "inline draft shared before retry");
+  await screenshot(pet, "inline-retry");
+  const inlineRequestCount = requests.length;
+  assert.equal(await evaluate(pet, () => {
+    const retry = document.querySelector("#companion-retry");
+    const rect = retry.getBoundingClientRect();
+    return rect.right < document.querySelector("#last-reply").getBoundingClientRect().left
+      && retry.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2))
+      && retry.querySelector("img").naturalWidth > 0;
+  }), true);
+  await evaluate(pet, () => { document.querySelector("#companion-retry").click(); document.querySelector("#companion-retry").click(); });
+  await until(() => inlineAttempts === 2 && evaluate(pet, async () => {
+    const state = await window.desktopPet.getChatState();
+    return !state.busy && state.history.at(-1)?.failed === false && document.querySelector("#companion-retry").hidden;
+  }), "inline retry finished");
+  assert.equal(requests.length, inlineRequestCount + 1);
+  assert.equal(requests.at(-1).messages.at(-1).content, "Retry beside pet");
+  assert.equal(await evaluate(pet, () => document.querySelector("#companion-text").value), "Another unsent thought");
+  await evaluate(pet, () => document.querySelector("#companion-close").click());
+  await evaluate(pet, () => window.desktopPet.setSettings({ scale: 1.5 }));
+  await until(() => pet.getBounds().height === 472, "restore test size");
   await screenshot(chat, "chat");
 
   // Edit and save through the real settings page; only the isolated service receives notes.
@@ -530,6 +599,7 @@ async function run() {
   assert.equal((await evaluate(chat, () => window.desktopPet.getChatState())).history.at(-1).failed, true);
   assert.equal(await evaluate(chat, () => document.querySelector("#retry-message").hidden), false);
   assert.equal(await evaluate(quick, () => document.querySelector("#retry-message").hidden), false);
+  assert.equal(await evaluate(pet, () => document.querySelector("#companion-retry").hidden), false);
   streamResponse.end("data: [DONE]\n\n");
   await send("After stop");
   assert.equal(requests.at(-1).messages.some((item) => item.content === "Stopped stream"), false);

@@ -6,6 +6,8 @@
 
 ## Chat, Persona, And Voice
 
+Click the speech icon beside your character to write a message. If the service URL or model name is missing, the settings button there opens the Chat tab and keeps your draft. Saving the settings does not send it. After a failed or stopped reply, **Retry** beside the pet resends the last message without replacing a different draft.
+
 Change language from `right-click menu > Language` or `Chat Settings > General > Interface Language`. It affects menus, windows, bubbles, and the default chat language.
 
 Right-click the pet and choose `Chat > Quick Input` for a minimal companion-style input box. Replies appear directly in the pet bubble. Choose `Chat > Full Chat` for a floating chat window with history, or `Chat > Chat Settings` to configure the companion.

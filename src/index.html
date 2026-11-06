@@ -31,18 +31,21 @@
         <button id="voice-toggle" class="icon-button" type="button"><img src="./icons/volume-2.svg" alt="" /></button>
       </div>
       <span id="companion-presence" role="status" hidden><i></i><i></i><i></i></span>
-      <button id="companion-stop" class="icon-button" type="button" hidden><img src="./icons/x.svg" alt="" /></button>
+      <button id="companion-stop" class="icon-button" type="button" hidden><img src="./icons/square.svg" alt="" /></button>
+      <button id="companion-retry" class="icon-button" type="button" hidden><img src="./icons/rotate-ccw.svg" alt="" /><span></span></button>
       <button id="last-reply" class="icon-button" type="button" disabled><img src="./icons/history.svg" alt="" /></button>
       <button id="talk" class="icon-button" type="button" aria-expanded="false" aria-controls="companion-input"><img src="./icons/message-square.svg" alt="" /></button>
       <button id="pet-menu" class="icon-button" type="button" aria-haspopup="menu"><img src="./icons/settings-2.svg" alt="" /></button>
     </div>
     <form id="companion-input" hidden>
-      <textarea id="companion-text" rows="2" maxlength="1200"></textarea>
+      <div class="companion-compose">
+        <textarea id="companion-text" rows="2" maxlength="1200"></textarea>
+        <span id="companion-feedback" role="status" hidden></span>
+      </div>
       <div class="companion-input-actions">
         <button id="companion-close" class="icon-button" type="button"><img src="./icons/x.svg" alt="" /></button>
-        <button id="companion-send" class="icon-button" type="submit"><img src="./icons/arrow-down.svg" alt="" /></button>
+        <button id="companion-send" class="icon-button" type="submit"><img class="send-icon" src="./icons/arrow-down.svg" alt="" /><img class="setup-icon" src="./icons/settings-2.svg" alt="" /></button>
       </div>
-      <span id="companion-feedback" role="status" hidden></span>
     </form>
     <script src="./i18n.js"></script>
     <script src="./speech-text.js"></script>
