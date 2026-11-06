@@ -10,7 +10,7 @@
   <p>
     <a href="https://github.com/TonyNa-code/desktop-pet/releases/latest"><strong>Download</strong></a> ·
     <a href="#get-started">Get started</a> ·
-    <a href="docs/releases/v0.5.0.md">What’s new</a>
+    <a href="docs/releases/v0.5.1.md">What’s new</a>
   </p>
   <p>
     <a href="https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml"><img src="https://github.com/TonyNa-code/desktop-pet/actions/workflows/build.yml/badge.svg" alt="Build status"></a>

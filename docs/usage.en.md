@@ -71,6 +71,12 @@ In automatic expression mode, a head touch or long press, a body tap, and puttin
 Click-to-change mode stays manual: one click advances one expression, double-clicks and long presses do not add changes, and dragging restores the expression you selected before the move. Existing sprite artwork is unchanged. For imported models, see the [Live2D guide](live2d.md).
 
 
+## Focus and break reminders
+
+Open the menu beside the character and choose **Tools > Start 25-Min Focus**. Reopen Tools to see the time left, pause, resume or end early. Pausing keeps the remaining time; quitting the app ends the session.
+
+Set a recurring 30- or 60-minute break in the same menu. Changing character, size or language keeps the next break on schedule.
+
 ## Position And Recovery
 
 Drag the pet where you want it; it returns there after restarting. When a display is removed or its work area changes, the pet moves into an available screen, with Quick Input following it. The pet temporarily fits smaller screens without changing your selected size.

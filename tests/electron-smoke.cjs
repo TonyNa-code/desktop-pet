@@ -178,6 +178,19 @@ async function run() {
   const endpoint = `http://127.0.0.1:${server.address().port}`;
   const petMenu = await menuFromButton(pet);
   assert.ok(petMenu.items.some(item => item.accelerator === "CommandOrControl+Q"));
+  const language = (await evaluate(pet, () => window.desktopPet.getAppState())).resolvedLanguage;
+  const tr = (key) => require(path.join(appRoot, "src/i18n")).t(key, {}, language);
+  async function focusCommand(key) {
+    const menu = await menuFromButton(pet);
+    const utility = menu.items.find(item => item.label === tr("menu.utility")).submenu;
+    const command = utility.items.find(item => item.label === tr(key));
+    assert.ok(command?.enabled, key);
+    command.click();
+  }
+  await focusCommand("menu.startFocus");
+  await focusCommand("menu.pauseFocus");
+  await focusCommand("menu.resumeFocus");
+  await focusCommand("menu.endFocus");
   assert.equal(await evaluate(pet, () => {
     const button = document.querySelector("#pet-menu");
     const rect = button.getBoundingClientRect();

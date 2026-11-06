@@ -118,7 +118,7 @@ let settings = { ...DEFAULT_SETTINGS };
 let profile = { ...DEFAULT_PROFILE };
 let dragSnapshot = null;
 let restReminderTimer = null;
-let focusTimer = null;
+let focusSession = null;
 let chatHistory = [];
 let chatRequest = null;
 let presentationSequence = 0;
@@ -1099,7 +1099,7 @@ function updateSettings(patch) {
     broadcastChatState();
     throw error;
   }
-  scheduleRestReminder();
+  if (settings.restReminderMinutes !== previous.settings.restReminderMinutes) scheduleRestReminder();
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
     applyWindowSize();
@@ -2007,11 +2007,69 @@ function showCurrentTime() {
 }
 
 function startFocusTimer() {
-  clearTimeout(focusTimer);
+  if (focusSession) return;
+  focusSession = { endsAt: Date.now() + 25 * MINUTE_MS, pausedMs: 0, timer: null };
+  reconcileFocusTimer();
   notify(t("notify.focusStartTitle"), t("notify.focusStartBody"), "review");
-  focusTimer = setTimeout(() => {
-    notify(t("notify.focusEndTitle"), t("notify.focusEndBody"), "waving");
-  }, 25 * 60 * 1000);
+}
+
+function focusMsLeft(session) {
+  return session.endsAt === null ? session.pausedMs : Math.max(0, session.endsAt - Date.now());
+}
+
+function reconcileFocusTimer() {
+  const session = focusSession;
+  if (!session || session.endsAt === null) return;
+  clearTimeout(session.timer);
+  const remaining = focusMsLeft(session);
+  if (remaining > 0) {
+    session.timer = setTimeout(() => { if (focusSession === session) reconcileFocusTimer(); }, remaining);
+    return;
+  }
+  focusSession = null;
+  notify(t("notify.focusEndTitle"), t("notify.focusEndBody"), "waving");
+}
+
+function focusStatus(session) {
+  const seconds = Math.ceil(focusMsLeft(session) / 1000);
+  const time = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+  return t(session.endsAt === null ? "menu.focusPaused" : "menu.focusRemaining", { time });
+}
+
+function focusMenuItems() {
+  if (focusSession && !focusMsLeft(focusSession)) reconcileFocusTimer();
+  const session = focusSession;
+  if (!session) return [{ label: t("menu.startFocus"), click: startFocusTimer }];
+  const paused = session.endsAt === null;
+  // A native menu can stay open past the deadline, or outlive its session.
+  function remainingIfCurrent() {
+    if (focusSession !== session || (session.endsAt === null) !== paused) return 0;
+    const remaining = focusMsLeft(session);
+    if (!remaining) reconcileFocusTimer();
+    return remaining;
+  }
+  return [
+    { label: focusStatus(session), enabled: false },
+    { label: t(paused ? "menu.resumeFocus" : "menu.pauseFocus"), click: () => {
+      const remaining = remainingIfCurrent();
+      if (!remaining) return;
+      if (paused) {
+        session.endsAt = Date.now() + remaining;
+        reconcileFocusTimer();
+      } else {
+        session.pausedMs = remaining;
+        clearTimeout(session.timer);
+        session.endsAt = null;
+      }
+      notify(t("app.name"), focusStatus(session), "review");
+    } },
+    { label: t("menu.endFocus"), click: () => {
+      if (!remainingIfCurrent()) return;
+      clearTimeout(session.timer);
+      focusSession = null;
+      notify(t("app.name"), t("notify.focusCancelled"), "idle");
+    } },
+  ];
 }
 
 function scheduleRestReminder() {
@@ -2094,7 +2152,7 @@ function showContextMenu() {
       label: t("menu.utility"),
       submenu: [
         { label: t("menu.showCurrentTime"), click: showCurrentTime },
-        { label: t("menu.startFocus"), click: startFocusTimer },
+        ...focusMenuItems(),
         {
           label: t("menu.restReminder"),
           submenu: restReminderItems,
@@ -2260,6 +2318,7 @@ if (ownsInstance) app.whenReady().then(() => {
   createTray();
   for (const event of ["display-added", "display-removed", "display-metrics-changed"]) screen.on(event, scheduleDisplayRecovery);
   powerMonitor.on("resume", scheduleDisplayRecovery);
+  powerMonitor.on("resume", reconcileFocusTimer);
 
   try {
     mainWindow.setIcon?.(iconImage());
